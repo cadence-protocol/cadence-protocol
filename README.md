@@ -17,7 +17,7 @@ Cadence defines a standard interface for onchain subscriptions — native pull p
 | Phase                           | Description                                                                                          | Status      |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------- |
 | **1 — Core ERC Standard**       | `ISubscription` interface, `SubscriptionManager`, `KeeperRegistry`, Foundry test suite ≥95% coverage | ✅ Complete |
-| **2 — EIP Submission**          | Ethereum Magicians discussion thread, formal EIP pull request, editor review                         | 🔜 Next     |
+| **2 — EIP Submission**          | Ethereum Magicians discussion thread, formal EIP pull request, editor review                         | 🔄 In Progress |
 | **3 — Documentation & Tooling** | Specification site, TypeScript SDK (`@cadenceprotocol/sdk`), The Graph subgraph, CLI                 | ⏳ Planned  |
 | **4 — Automation Service**      | Keeper network, scheduler, dunning manager, Stripe-compatible webhooks, merchant dashboard           | ⏳ Planned  |
 | **5 — Security**                | Automated analysis (Slither, Aderyn), formal audit (Sherlock / Code4rena), Immunefi bounty           | ⏳ Planned  |
@@ -104,7 +104,7 @@ See [docs/rationale.md](docs/rationale.md) for the reasoning behind key design d
 ## Links
 
 - Website: [cadenceprotocol.build](https://cadenceprotocol.build)
-- Discussion: Ethereum Magicians _(coming soon)_
+- Discussion: [Ethereum Magicians — ERC: Standard Interface for Onchain Recurring Payments](https://ethereum-magicians.org/t/erc-standard-interface-for-onchain-recurring-payments/27946)
 - X: [@cadencefinance](https://x.com/cadencefinance)
 
 ## License
