@@ -18,6 +18,12 @@ what alternatives were considered, and the reasoning behind the final decision.
    - [`getStatus()` Returning `PastDue` Dynamically](#getstatus-returning-pastdue-dynamically)
    - [`maxPayments == 0` Meaning Unlimited](#maxpayments--0-meaning-unlimited)
    - [`ISubscriptionReceiver` as an Optional Pull Interface](#isubscriptionreceiver-as-an-optional-pull-interface)
+6. [Extension Interfaces](#extension-interfaces)
+   - [Why Extension Interfaces Instead of a Monolithic ISubscription](#1-why-extension-interfaces-instead-of-a-monolithic-isubscription)
+   - [ISubscriptionTrial — Why Not Rely Solely on SubscriptionTerms.trialPeriod](#2-isubscriptiontrial--why-not-rely-solely-on-subscriptiontermstrialperiod)
+   - [ISubscriptionTiered — tierId as bytes32 and Price/Interval Immutability](#3-isubscriptiontiered--tierid-as-bytes32-and-priceinterval-immutability)
+   - [ISubscriptionDiscovery — Minimal On-Chain Data, Rich Off-Chain Metadata](#4-isubscriptiondiscovery--minimal-on-chain-data-rich-off-chain-metadata)
+   - [ISubscriptionHook vs ISubscriptionReceiver — Separation of Concerns](#5-isubscriptionhook-vs-isubscriptionreceiver--separation-of-concerns)
 
 ---
 
@@ -285,3 +291,211 @@ Critically, all callbacks are wrapped in `try/catch`: a reverting merchant hook 
 blocks payment collection. The standard's liveness guarantee — that a due payment can
 always be collected — must not be contingent on the correctness of third-party merchant
 code.
+
+---
+
+## Extension Interfaces
+
+The Cadence Protocol standard is deliberately layered. `ISubscription` defines the
+minimum interface that all conforming implementations must satisfy: subscribe, collect,
+cancel, pause, resume, and the associated view functions. Beyond this core, the protocol
+defines four standalone extension interfaces — `ISubscriptionTrial`, `ISubscriptionTiered`,
+`ISubscriptionDiscovery`, and `ISubscriptionHook` — each of which a contract may implement
+independently. No extension requires inheriting from `ISubscription` or from any other
+extension. A contract declares support for an extension exclusively via ERC-165
+`supportsInterface()`, returning `true` for the corresponding interface ID constant.
+This approach is preferable to a monolithic interface for the same reason the SOLID
+principle of interface segregation exists in software engineering: a single large interface
+forces every implementor to provide every feature, raising the minimum viable
+implementation cost for simple use cases. A minimal recurring-revenue SaaS contract
+needs nothing beyond `ISubscription`. A creator platform that offers free trials adds
+`ISubscriptionTrial`. A DAO treasury that sells tiered governance seats adds
+`ISubscriptionTiered`. Each protocol chooses exactly the surface area it needs, and
+external contracts — access-control layers, frontends, cross-chain bridges, indexers —
+can detect the supported feature set at runtime without any hard coupling to a particular
+implementation class.
+
+### 1. Why Extension Interfaces Instead of a Monolithic ISubscription
+
+A monolithic interface that includes trial management, tier management, discovery
+registration, and dunning hooks in a single type definition would impose a non-trivial
+implementation burden on every conforming contract. A developer deploying a simple
+on-chain subscription gate for a DAO proposal would be required to implement tier
+management functions they have no use for, or to provide stub reverts that satisfy the
+type-checker while adding no real behaviour. This creates two failure modes: either the
+standard is adopted at a lower rate because the implementation cost is too high, or it is
+adopted with hollow stubs that satisfy the interface mechanically but provide no semantic
+guarantee.
+
+The opt-in extension model solves both problems. Each extension interface is a coherent
+unit of functionality — a collection of functions, events, and errors that address a
+single capability — and a contract that does not implement an extension simply returns
+`false` from `supportsInterface()` for that extension's ID. Any external contract or
+off-chain indexer that wants to interact with a capability it cannot find degrades
+gracefully rather than failing with a missing-function revert.
+
+This pattern has a direct precedent in the Ethereum standard library. ERC-721 defines the
+base NFT interface (`IERC721`), but enumeration of all tokens (`IERC721Enumerable`) and
+metadata retrieval (`IERC721Metadata`) are separate optional extensions. OpenZeppelin's
+ERC-721 implementation exposes them independently and declares each via ERC-165.
+Wallets, marketplaces, and explorers probe `supportsInterface()` before attempting
+enumeration or metadata reads — the same runtime detection mechanism used by the
+Cadence Protocol. The key difference is that while ERC-721 extensions are defined in
+the same EIP, the Cadence extensions are defined in separate interface files to keep
+the core EIP specification minimal and to allow future extensions to be proposed as
+independent EIPs without modifying the base standard.
+
+### 2. ISubscriptionTrial — Why Not Rely Solely on SubscriptionTerms.trialPeriod
+
+`SubscriptionTerms.trialPeriod` encodes the initial trial duration as part of the
+subscription agreement between subscriber and merchant at creation time. Like every other
+field in `SubscriptionTerms`, it is logically immutable once the subscription exists: it
+is part of the recorded terms of the bilateral agreement. A subscriber accepted those
+terms; changing them retroactively would alter a record that both parties have implicitly
+signed by virtue of the on-chain transaction.
+
+`ISubscriptionTrial` adds capabilities that are operational rather than contractual.
+`isInTrial(subId)` is a derived read that any frontend, keeper, or access-control
+contract needs to gate behaviour (e.g. do not collect payment, show "Trial" badge in
+UI). The core `ISubscription` interface does not expose a dedicated trial-query function
+because `getStatus()` and `nextPaymentDue()` together convey sufficient information
+for core payment logic. But an interface that explicitly names trial concepts makes UIs
+and integrations clearer and eliminates the need for each consumer to re-implement the
+`trialPeriod > 0 && block.timestamp < createdAt + trialPeriod` derivation. Similarly,
+`trialEndsAt(subId)` returns the timestamp directly, rather than requiring callers to
+call `getTerms()` and `nextPaymentDue()` and reconstruct it.
+
+`extendTrial()` is the key addition that `SubscriptionTerms` cannot model. A merchant
+may wish to extend a trial for a high-value prospect — a sales concession that is common
+in commercial SaaS. This is an operational decision made unilaterally by the merchant;
+it does not require the subscriber's consent because it only benefits the subscriber by
+delaying their payment obligation. Restricting `extendTrial()` to the merchant prevents
+subscribers from extending their own trials indefinitely — a free-ride vector that would
+undermine the commercial viability of any subscription product using this extension.
+Critically, extending a trial does not modify `SubscriptionTerms`. The terms of the
+agreement — interval, amount, maxPayments — remain unchanged. The extension only defers
+`nextPaymentAt`, which is runtime state, not agreed contractual terms.
+
+### 3. ISubscriptionTiered — tierId as bytes32 and Price/Interval Immutability
+
+**`tierId` as `bytes32`.** The choice of `bytes32` for tier identifiers is consistent
+with the `bytes32` type used for `subId` throughout the core interface, and for the same
+underlying reason: cross-chain determinism. A merchant who defines their pricing tiers
+once may want those tier definitions to be referenceable from any chain where their
+product operates. A `tierId` derived as `keccak256(abi.encodePacked(merchant, name))`
+produces the same value on every EVM chain, allowing cross-chain messaging systems to
+reference tiers by a stable identifier without a chain-specific lookup. A sequential
+`uint256` counter would differ between a deployment on Ethereum mainnet and one on
+Arbitrum, making cross-chain tier references impossible without an explicit mapping layer.
+
+**Price and interval immutability after tier creation.** The `updateTierMetadata()`
+function deliberately allows only the `metadataURI` to change — not `amount` or
+`interval`. This design choice protects existing subscribers from silent price changes.
+If a merchant could call `updateTier(tierId, newAmount)` and have the new amount take
+effect immediately for all subscribers on that tier, it would effectively be a unilateral
+contract modification without subscriber consent. Merchants who need to reprice must
+create a new tier and migrate subscribers explicitly — a deliberate friction that ensures
+any subscriber moving to a new price does so via an observable on-chain action. This
+mirrors how cloud providers handle pricing changes: existing customers retain their
+grandfathered rates until they actively upgrade or agree to new terms.
+
+**`deactivateTier()` reverts if active subscribers remain.** Allowing a merchant to
+deactivate a tier while subscribers are still on it would strand those subscribers: the
+tier's `active` flag becomes `false`, but the subscription still references the tier ID.
+Future interactions — upgrades, downgrades, feature-gating based on tier — would hit
+unexpected states. Requiring all subscribers to migrate off a tier before deactivation
+forces an explicit, auditable transition rather than a silent stranding. Merchants who
+want to sunset a tier cleanly must first offer subscribers an alternative and wait for
+them to migrate; this is the correct commercial behaviour.
+
+**`metadataURI` for feature descriptions.** Subscription tiers are differentiated by
+features, limits, and SLAs as much as by price — "Basic" may mean 10 API calls per day
+where "Pro" means unlimited. Encoding feature sets on-chain would make every
+`createTier()` transaction expensive and inflexible: adding a new feature attribute
+would require a contract upgrade. Storing only a URI on-chain and placing rich feature
+descriptions in a JSON document at the URI keeps the on-chain footprint minimal and
+allows features to be updated without gas costs.
+
+### 4. ISubscriptionDiscovery — Minimal On-Chain Data, Rich Off-Chain Metadata
+
+The discovery registry stores only the four fields needed for on-chain discoverability
+and trust signalling: merchant address, display name, metadata URI, and registration
+timestamp. The `verified` flag adds a lightweight operator-set trust signal. Everything
+else — feature descriptions, pricing plans, logos, social links, subscriber testimonials —
+lives at the `metadataURI`.
+
+**Why active subscriber counts are not stored on-chain.** Maintaining an accurate active
+subscriber count in the discovery registry would require every `subscribe()` and
+`cancelSubscription()` call on every `SubscriptionManager` to write to the discovery
+contract. This creates a hard cross-contract dependency in the core payment flow: a
+subscribe that fails because the discovery registry's gas is exhausted, or because the
+registry has been upgraded incompatibly, would break the base `ISubscription` interface.
+More fundamentally, it would permanently couple the discovery mechanism to the payment
+mechanism — a violation of the same single-responsibility principle that motivates the
+extension interface design. The correct home for aggregated metrics is an off-chain
+indexer (The Graph subgraph), which reconstructs counts from the `SubscriptionCreated`
+and `SubscriptionCancelled` event stream at no on-chain cost.
+
+**Pagination via `getMerchants(offset, limit)`.** An implementation backed by an
+`EnumerableSet` or dynamic array would allow unbounded iteration over the merchant list
+in a single call. As the registry grows, such a call becomes a denial-of-service vector:
+a caller can trigger an out-of-gas revert that is proportional to the registry size,
+and no mitigation is possible without a contract upgrade. Explicit pagination shifts
+the responsibility for bounding gas consumption to the caller, where it belongs. A limit
+cap of 100 per call provides a practical maximum while keeping individual transactions
+within gas limits on any current EVM.
+
+**The `verified` flag.** On-chain verification is analogous to a verified checkmark on
+a social platform: it signals that the registry operator has performed some off-chain
+due diligence (e.g. confirmed legal identity, checked for scam indicators) but it is
+not a cryptographic security guarantee. The mechanism is intentionally simple. More
+sophisticated on-chain reputation systems — staking, attestation networks, challenge
+mechanisms — can be built on top of the `MerchantRegistered` event stream and the
+`verified` flag without modifying this interface.
+
+### 5. ISubscriptionHook vs ISubscriptionReceiver — Separation of Concerns
+
+**`ISubscriptionReceiver`** is called synchronously by `SubscriptionManager` during the
+execution of `collectPayment()` and `cancelSubscription()`. It handles success events:
+the payment was collected, the subscription was cancelled. Its design is tightly
+constrained by the requirement that it must never block the core operation — hence the
+`try/catch` wrapper in the reference implementation and the explicit note in the NatSpec
+that a reverting callback does not prevent payment collection. The receiver is the
+merchant's last-mile notification mechanism for on-chain applications that need to update
+their state in the same transaction as the payment.
+
+**`ISubscriptionHook`** is a fundamentally different category of integration. It handles
+failure events, and failure handling in subscription billing is inherently a multi-step,
+time-delayed process: detect failure, wait for a grace period, attempt retries at
+scheduled intervals, finally cancel if the grace period expires without recovery. None of
+these steps can be encoded in a single synchronous transaction. A hook that blocks
+`collectPayment()` while it waits for a retry window is not just a liveness risk — it is
+architecturally impossible. Consequently, `ISubscriptionHook` is designed to be called
+by the off-chain Dunning Manager component of the Cadence Automation Service, which
+reads `getDunningConfig()` to obtain the merchant's preferred policy and then executes
+the dunning sequence asynchronously.
+
+This separation yields three concrete benefits. First, it removes all merchant-defined
+dunning logic from the critical path of payment collection. A bug in a merchant's hook
+implementation cannot cause `collectPayment()` to revert or exceed its gas limit. Second,
+it allows the dunning schedule to span multiple blocks and even multiple days — a retry
+seven days after the initial failure is straightforwardly expressed in a keeper's job
+scheduler, whereas it would require complex on-chain state machines to handle in a
+synchronous contract call. Third, it makes the dunning policy a view-queryable
+configuration rather than an opaque code path: any party can read `getDunningConfig(subId)`
+to understand what will happen when a payment fails, enabling transparent off-chain
+auditing of dunning behaviour.
+
+**The `bytes4` return value pattern.** All callback functions in `ISubscriptionHook`
+return their own four-byte selector, following the pattern established by
+`IERC721Receiver.onERC721Received()` and `IERC1155Receiver.onERC1155Received()`. This
+convention serves as a proof of intent: only a contract that has explicitly read the
+interface specification and implemented the function correctly will return the exact
+selector value. An EOA address returns nothing; a contract that accidentally accepts
+the call returns a default value; a contract that has not implemented the function
+reverts. All three non-compliant cases produce a result that differs from the expected
+selector, allowing the Dunning Manager to detect opt-outs and fall back to protocol
+defaults without having to distinguish between different revert reasons or empty return
+data. If the Cadence Automation Service falls back to protocol defaults (7-day grace
+period, 2 retries at 48-hour intervals), merchants that do not implement `ISubscriptionHook`
+receive reasonable behaviour without any configuration overhead.
