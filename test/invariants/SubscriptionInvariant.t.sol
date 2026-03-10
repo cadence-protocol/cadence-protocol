@@ -41,20 +41,20 @@ contract SubscriptionManagerHandler is Test {
 
     // ── Per-subscription snapshots ────────────────────────────────────────────
 
-    mapping(bytes32 => bool)    public ghost_wasTerminal;
+    mapping(bytes32 => bool) public ghost_wasTerminal;
     mapping(bytes32 => uint256) public ghost_lastPaymentCount;
     mapping(bytes32 => uint256) public ghost_lastNextPaymentAt;
 
     // ── Constants ─────────────────────────────────────────────────────────────
 
-    uint256 constant AMOUNT   = 100e18;
-    uint48  constant INTERVAL = 1 days;
+    uint256 constant AMOUNT = 100e18;
+    uint48 constant INTERVAL = 1 days;
 
     constructor(SubscriptionManager _manager, MockERC20 _token) {
-        manager    = _manager;
-        token      = _token;
+        manager = _manager;
+        token = _token;
         subscriber = makeAddr("inv_subscriber");
-        merchant   = makeAddr("inv_merchant");
+        merchant = makeAddr("inv_merchant");
 
         token.mint(subscriber, type(uint128).max);
         vm.prank(subscriber);
@@ -68,12 +68,12 @@ contract SubscriptionManagerHandler is Test {
         maxPayments = bound(maxPayments, 0, 10);
 
         SubscriptionTerms memory terms = SubscriptionTerms({
-            token:          address(token),
-            amount:         AMOUNT,
-            interval:       INTERVAL,
-            trialPeriod:    0,
-            maxPayments:    maxPayments,
-            originChainId:  block.chainid,
+            token: address(token),
+            amount: AMOUNT,
+            interval: INTERVAL,
+            trialPeriod: 0,
+            maxPayments: maxPayments,
+            originChainId: block.chainid,
             paymentChainId: block.chainid
         });
 
@@ -81,8 +81,8 @@ contract SubscriptionManagerHandler is Test {
         try manager.subscribe(merchant, terms) returns (bytes32 subId) {
             subIdAt[subIdCount] = subId;
             subIdCount++;
-            ghost_lastPaymentCount[subId]   = manager.getPaymentCount(subId);
-            ghost_lastNextPaymentAt[subId]  = manager.nextPaymentDue(subId);
+            ghost_lastPaymentCount[subId] = manager.getPaymentCount(subId);
+            ghost_lastNextPaymentAt[subId] = manager.nextPaymentDue(subId);
         } catch {}
     }
 
@@ -103,7 +103,7 @@ contract SubscriptionManagerHandler is Test {
             ghost_wasTerminal[subId] = true;
         }
 
-        uint256 nextBefore   = manager.nextPaymentDue(subId);
+        uint256 nextBefore = manager.nextPaymentDue(subId);
 
         // Warp to payment due if needed
         if (block.timestamp < nextBefore) {
@@ -113,7 +113,7 @@ contract SubscriptionManagerHandler is Test {
         try manager.collectPayment(subId) returns (bool success) {
             if (success) {
                 uint256 countAfter = manager.getPaymentCount(subId);
-                uint256 nextAfter  = manager.nextPaymentDue(subId);
+                uint256 nextAfter = manager.nextPaymentDue(subId);
 
                 // nextPaymentAt must be monotonically increasing
                 if (nextAfter <= nextBefore) {
@@ -131,7 +131,7 @@ contract SubscriptionManagerHandler is Test {
                     ghost_paymentCountIncreasedAfterTerminal = true;
                 }
 
-                ghost_lastPaymentCount[subId]  = countAfter;
+                ghost_lastPaymentCount[subId] = countAfter;
                 ghost_lastNextPaymentAt[subId] = nextAfter;
             }
         } catch {
@@ -169,7 +169,7 @@ contract SubscriptionManagerHandler is Test {
 
         vm.prank(subscriber);
         try manager.cancelSubscription(subId) {
-            ghost_wasTerminal[subId]      = true;
+            ghost_wasTerminal[subId] = true;
             ghost_lastPaymentCount[subId] = manager.getPaymentCount(subId);
         } catch {}
     }
@@ -201,11 +201,11 @@ contract SubscriptionManagerHandler is Test {
 
 contract SubscriptionInvariantTest is Test {
     SubscriptionManagerHandler public handler;
-    SubscriptionManager        public manager;
-    MockERC20                  public token;
+    SubscriptionManager public manager;
+    MockERC20 public token;
 
     function setUp() public {
-        token   = new MockERC20();
+        token = new MockERC20();
         // keeperRegistry == address(0): permissionless collection for invariant testing
         manager = new SubscriptionManager(address(0));
         handler = new SubscriptionManagerHandler(manager, token);
@@ -227,18 +227,12 @@ contract SubscriptionInvariantTest is Test {
     /// @dev nextPaymentAt must be strictly greater after each successful
     ///      collectPayment (the clock always moves forward).
     function invariant_NextPaymentMonotonic() public view {
-        assertFalse(
-            handler.ghost_nextPaymentDecreased(),
-            "nextPaymentAt decreased after a successful collectPayment"
-        );
+        assertFalse(handler.ghost_nextPaymentDecreased(), "nextPaymentAt decreased after a successful collectPayment");
     }
 
     /// @dev When maxPayments > 0, paymentCount must never exceed it.
     function invariant_PaymentCountBounded() public view {
-        assertFalse(
-            handler.ghost_paymentCountExceededMax(),
-            "paymentCount exceeded maxPayments"
-        );
+        assertFalse(handler.ghost_paymentCountExceededMax(), "paymentCount exceeded maxPayments");
     }
 
     /// @dev Two consecutive collectPayment calls in the same block must not both

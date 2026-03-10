@@ -191,10 +191,12 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @param merchant Address of the merchant to subscribe to
     /// @param terms    Subscription terms agreed by both parties
     /// @return subId   Unique deterministic subscription identifier
-    function subscribe(
-        address merchant,
-        SubscriptionTerms calldata terms
-    ) external payable nonReentrant returns (bytes32 subId) {
+    function subscribe(address merchant, SubscriptionTerms calldata terms)
+        external
+        payable
+        nonReentrant
+        returns (bytes32 subId)
+    {
         _validateTerms(terms, merchant);
 
         address subscriber = msg.sender;
@@ -216,18 +218,14 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
         }
 
         // ── Derive subscription ID ─────────────────────────────────────────────
-        subId = keccak256(
-            abi.encodePacked(subscriber, merchant, block.timestamp, block.chainid, _nonce++)
-        );
+        subId = keccak256(abi.encodePacked(subscriber, merchant, block.timestamp, block.chainid, _nonce++));
 
         // ── Compute timing ────────────────────────────────────────────────────
         uint256 now_ = block.timestamp;
         bool hasTrial = terms.trialPeriod > 0;
 
         // nextPaymentAt: after trial if trial exists, otherwise one full interval from now
-        uint256 nextPaymentAt_ = hasTrial
-            ? now_ + terms.trialPeriod
-            : now_ + terms.interval;
+        uint256 nextPaymentAt_ = hasTrial ? now_ + terms.trialPeriod : now_ + terms.interval;
 
         // ── Effects: store subscription ───────────────────────────────────────
         _subscriptions[subId] = SubscriptionData({
@@ -281,9 +279,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      Emits {PaymentCollected} on success or {PaymentFailed} on soft failure.
     /// @param subId Subscription identifier
     /// @return success True if the payment was collected; false on soft failure
-    function collectPayment(
-        bytes32 subId
-    )
+    function collectPayment(bytes32 subId)
         external
         nonReentrant
         onlyExistingSubscription(subId)
@@ -294,11 +290,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
 
         // Terminal-state guard
         Status stored = sub.status;
-        if (
-            stored == Status.Paused ||
-            stored == Status.Cancelled ||
-            stored == Status.Expired
-        ) {
+        if (stored == Status.Paused || stored == Status.Cancelled || stored == Status.Expired) {
             revert SubscriptionNotActive(subId, stored);
         }
 
@@ -326,9 +318,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      a reverting callback cannot prevent cancellation.
     ///      Emits {SubscriptionCancelled}.
     /// @param subId Subscription identifier
-    function cancelSubscription(
-        bytes32 subId
-    ) external nonReentrant onlyExistingSubscription(subId) {
+    function cancelSubscription(bytes32 subId) external nonReentrant onlyExistingSubscription(subId) {
         SubscriptionData storage sub = _subscriptions[subId];
 
         if (msg.sender != sub.subscriber && msg.sender != sub.merchant) {
@@ -349,9 +339,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @dev Only the subscriber may pause. Reverts if the subscription is not Active.
     ///      Emits {SubscriptionPaused}.
     /// @param subId Subscription identifier
-    function pauseSubscription(
-        bytes32 subId
-    ) external onlyExistingSubscription(subId) {
+    function pauseSubscription(bytes32 subId) external onlyExistingSubscription(subId) {
         SubscriptionData storage sub = _subscriptions[subId];
 
         if (msg.sender != sub.subscriber) revert UnauthorizedCaller(msg.sender);
@@ -366,9 +354,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      block.timestamp + interval from the moment of resumption.
     ///      Emits {SubscriptionResumed}.
     /// @param subId Subscription identifier
-    function resumeSubscription(
-        bytes32 subId
-    ) external onlyExistingSubscription(subId) {
+    function resumeSubscription(bytes32 subId) external onlyExistingSubscription(subId) {
         SubscriptionData storage sub = _subscriptions[subId];
 
         if (msg.sender != sub.subscriber) revert UnauthorizedCaller(msg.sender);
@@ -389,9 +375,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      block.timestamp > nextPaymentAt, PastDue is returned without writing state.
     /// @param subId Subscription identifier
     /// @return      Current {Status}
-    function getStatus(
-        bytes32 subId
-    ) external view onlyExistingSubscription(subId) returns (Status) {
+    function getStatus(bytes32 subId) external view onlyExistingSubscription(subId) returns (Status) {
         SubscriptionData storage sub = _subscriptions[subId];
         if (sub.status == Status.Active && block.timestamp > sub.nextPaymentAt) {
             return Status.PastDue;
@@ -402,45 +386,35 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @notice Return the Unix timestamp at which the next payment is due.
     /// @param subId     Subscription identifier
     /// @return timestamp Unix timestamp of the next payment
-    function nextPaymentDue(
-        bytes32 subId
-    ) external view onlyExistingSubscription(subId) returns (uint256 timestamp) {
+    function nextPaymentDue(bytes32 subId) external view onlyExistingSubscription(subId) returns (uint256 timestamp) {
         return _subscriptions[subId].nextPaymentAt;
     }
 
     /// @notice Return the full terms of a subscription.
     /// @param subId Subscription identifier
     /// @return      The {SubscriptionTerms} struct
-    function getTerms(
-        bytes32 subId
-    ) external view onlyExistingSubscription(subId) returns (SubscriptionTerms memory) {
+    function getTerms(bytes32 subId) external view onlyExistingSubscription(subId) returns (SubscriptionTerms memory) {
         return _subscriptions[subId].terms;
     }
 
     /// @notice Return the subscriber address for a subscription.
     /// @param subId Subscription identifier
     /// @return      Address of the subscriber
-    function getSubscriber(
-        bytes32 subId
-    ) external view onlyExistingSubscription(subId) returns (address) {
+    function getSubscriber(bytes32 subId) external view onlyExistingSubscription(subId) returns (address) {
         return _subscriptions[subId].subscriber;
     }
 
     /// @notice Return the merchant address for a subscription.
     /// @param subId Subscription identifier
     /// @return      Address of the merchant
-    function getMerchant(
-        bytes32 subId
-    ) external view onlyExistingSubscription(subId) returns (address) {
+    function getMerchant(bytes32 subId) external view onlyExistingSubscription(subId) returns (address) {
         return _subscriptions[subId].merchant;
     }
 
     /// @notice Return the total number of successful payments collected.
     /// @param subId Subscription identifier
     /// @return      Payment count
-    function getPaymentCount(
-        bytes32 subId
-    ) external view onlyExistingSubscription(subId) returns (uint256) {
+    function getPaymentCount(bytes32 subId) external view onlyExistingSubscription(subId) returns (uint256) {
         return _subscriptions[subId].paymentCount;
     }
 
@@ -483,9 +457,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @inheritdoc ERC165
     /// @dev Returns true for ISubscription.interfaceId and IERC165.interfaceId.
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
-        return
-            interfaceId == type(ISubscription).interfaceId ||
-            super.supportsInterface(interfaceId);
+        return interfaceId == type(ISubscription).interfaceId || super.supportsInterface(interfaceId);
     }
 
     // ─────────────────────────────────────────────
@@ -494,10 +466,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
 
     /// @dev Collect a single ETH payment. Soft-fails (PastDue + PaymentFailed event,
     ///      returns false) if the subscriber's deposit balance is insufficient.
-    function _collectETHPayment(
-        bytes32 subId,
-        SubscriptionData storage sub
-    ) internal returns (bool) {
+    function _collectETHPayment(bytes32 subId, SubscriptionData storage sub) internal returns (bool) {
         uint256 available = _ethDeposits[sub.subscriber];
         if (available < sub.terms.amount) {
             sub.status = Status.PastDue;
@@ -525,10 +494,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
 
     /// @dev Collect a single ERC-20 payment. Soft-fails (PastDue + PaymentFailed event,
     ///      returns false) if the subscriber's allowance is insufficient.
-    function _collectERC20Payment(
-        bytes32 subId,
-        SubscriptionData storage sub
-    ) internal returns (bool) {
+    function _collectERC20Payment(bytes32 subId, SubscriptionData storage sub) internal returns (bool) {
         uint256 allowance = IERC20(sub.terms.token).allowance(sub.subscriber, address(this));
         if (allowance < sub.terms.amount) {
             sub.status = Status.PastDue;
@@ -563,12 +529,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @dev Attempt to call ISubscriptionReceiver.onPaymentCollected on `merchant`.
     ///      If the merchant does not support ISubscriptionReceiver or the call reverts,
     ///      the failure is silently swallowed — the callback must never block payment.
-    function _notifyPaymentCollected(
-        address merchant,
-        bytes32 subId,
-        uint256 amount,
-        address token
-    ) internal {
+    function _notifyPaymentCollected(address merchant, bytes32 subId, uint256 amount, address token) internal {
         if (!_supportsReceiverInterface(merchant)) return;
         try ISubscriptionReceiver(merchant).onPaymentCollected(subId, amount, token) {} catch {}
     }
@@ -584,9 +545,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      ISubscriptionReceiver via ERC-165. EOAs and non-compliant contracts return false.
     function _supportsReceiverInterface(address target) internal view returns (bool) {
         if (target.code.length == 0) return false;
-        try IERC165(target).supportsInterface(type(ISubscriptionReceiver).interfaceId)
-            returns (bool supported)
-        {
+        try IERC165(target).supportsInterface(type(ISubscriptionReceiver).interfaceId) returns (bool supported) {
             return supported;
         } catch {
             return false;
@@ -611,8 +570,7 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      Authorisation is skipped entirely when keeperRegistry == address(0).
     function _checkKeeperAuth() internal view {
         if (keeperRegistry == address(0)) return;
-        bool authorized = msg.sender == keeperRegistry ||
-            IKeeperRegistry(keeperRegistry).isAuthorized(msg.sender);
+        bool authorized = msg.sender == keeperRegistry || IKeeperRegistry(keeperRegistry).isAuthorized(msg.sender);
         if (!authorized) revert UnauthorizedCaller(msg.sender);
     }
 }

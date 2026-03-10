@@ -47,4 +47,5 @@ contract MockSubscriptionReceiver is ISubscriptionReceiver, ERC165 {
 ///      which exercises the catch branch inside _supportsReceiverInterface.
 contract NonERC165Contract {
     // No fallback — unknown selectors will revert, caught by try/catch
-}
+
+    }

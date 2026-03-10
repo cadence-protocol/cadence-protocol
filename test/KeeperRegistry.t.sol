@@ -7,9 +7,9 @@ import {KeeperRegistry} from "../src/KeeperRegistry.sol";
 contract KeeperRegistryTest is Test {
     KeeperRegistry public registry;
 
-    address public owner    = makeAddr("owner");
-    address public keeper1  = makeAddr("keeper1");
-    address public keeper2  = makeAddr("keeper2");
+    address public owner = makeAddr("owner");
+    address public keeper1 = makeAddr("keeper1");
+    address public keeper2 = makeAddr("keeper2");
     address public merchant = makeAddr("merchant");
     address public stranger = makeAddr("stranger");
 
@@ -17,9 +17,9 @@ contract KeeperRegistryTest is Test {
         registry = new KeeperRegistry(owner, keeper1);
 
         vm.label(address(registry), "KeeperRegistry");
-        vm.label(owner,    "Owner");
-        vm.label(keeper1,  "Keeper1");
-        vm.label(keeper2,  "Keeper2");
+        vm.label(owner, "Owner");
+        vm.label(keeper1, "Keeper1");
+        vm.label(keeper2, "Keeper2");
         vm.label(merchant, "Merchant");
         vm.label(stranger, "Stranger");
     }
@@ -71,9 +71,7 @@ contract KeeperRegistryTest is Test {
     function test_AddKeeper_Reverts_AlreadyRegistered() public {
         // keeper1 was registered in constructor
         vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.AlreadyRegistered.selector, keeper1)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.AlreadyRegistered.selector, keeper1));
         registry.addKeeper(keeper1);
     }
 
@@ -82,9 +80,7 @@ contract KeeperRegistryTest is Test {
         registry.blacklistKeeper(keeper2);
 
         vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.KeeperIsBlacklisted.selector, keeper2)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.KeeperIsBlacklisted.selector, keeper2));
         registry.addKeeper(keeper2);
     }
 
@@ -108,9 +104,7 @@ contract KeeperRegistryTest is Test {
 
     function test_RemoveKeeper_Reverts_NotRegistered() public {
         vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.NotRegistered.selector, keeper2)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.NotRegistered.selector, keeper2));
         registry.removeKeeper(keeper2);
     }
 
@@ -160,9 +154,7 @@ contract KeeperRegistryTest is Test {
         registry.blacklistKeeper(keeper1);
 
         vm.prank(owner);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.KeeperIsBlacklisted.selector, keeper1)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.KeeperIsBlacklisted.selector, keeper1));
         registry.addKeeper(keeper1);
     }
 
@@ -197,9 +189,7 @@ contract KeeperRegistryTest is Test {
         registry.addMerchantKeeper(keeper2);
 
         vm.prank(merchant);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.AlreadyRegistered.selector, keeper2)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.AlreadyRegistered.selector, keeper2));
         registry.addMerchantKeeper(keeper2);
     }
 
@@ -214,17 +204,13 @@ contract KeeperRegistryTest is Test {
         registry.blacklistKeeper(keeper2);
 
         vm.prank(merchant);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.KeeperIsBlacklisted.selector, keeper2)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.KeeperIsBlacklisted.selector, keeper2));
         registry.addMerchantKeeper(keeper2);
     }
 
     function test_MerchantKeeper_Remove_Reverts_NotRegistered() public {
         vm.prank(merchant);
-        vm.expectRevert(
-            abi.encodeWithSelector(KeeperRegistry.NotRegistered.selector, keeper2)
-        );
+        vm.expectRevert(abi.encodeWithSelector(KeeperRegistry.NotRegistered.selector, keeper2));
         registry.removeMerchantKeeper(keeper2);
     }
 
@@ -281,13 +267,13 @@ contract KeeperRegistryTest is Test {
         registry.transferOwnership(newOwner);
 
         // Still the old owner until accepted
-        assertEq(registry.owner(),        owner);
+        assertEq(registry.owner(), owner);
         assertEq(registry.pendingOwner(), newOwner);
 
         vm.prank(newOwner);
         registry.acceptOwnership();
 
-        assertEq(registry.owner(),        newOwner);
+        assertEq(registry.owner(), newOwner);
         assertEq(registry.pendingOwner(), address(0));
     }
 

@@ -18,22 +18,22 @@ contract SubscriptionManagerTest is Test {
     // ─── Actors ───────────────────────────────────────────────────────────────
 
     address public subscriber = makeAddr("subscriber");
-    address public merchant   = makeAddr("merchant");
-    address public keeper     = makeAddr("keeper");
-    address public stranger   = makeAddr("stranger");
+    address public merchant = makeAddr("merchant");
+    address public keeper = makeAddr("keeper");
+    address public stranger = makeAddr("stranger");
 
     // ─── Constants ────────────────────────────────────────────────────────────
 
-    uint256 constant AMOUNT   = 100e18;
-    uint48  constant INTERVAL = 30 days;
-    uint48  constant TRIAL    = 7 days;
+    uint256 constant AMOUNT = 100e18;
+    uint48 constant INTERVAL = 30 days;
+    uint48 constant TRIAL = 7 days;
 
     // ─── Setup ────────────────────────────────────────────────────────────────
 
     function setUp() public {
-        token    = new MockERC20();
+        token = new MockERC20();
         registry = new MockKeeperRegistry();
-        manager  = new SubscriptionManager(address(registry));
+        manager = new SubscriptionManager(address(registry));
 
         registry.setAuthorized(keeper, true);
 
@@ -42,15 +42,15 @@ contract SubscriptionManagerTest is Test {
         token.approve(address(manager), type(uint256).max);
 
         vm.deal(subscriber, 100 ether);
-        vm.deal(merchant,   10 ether);
+        vm.deal(merchant, 10 ether);
 
-        vm.label(address(manager),  "SubscriptionManager");
-        vm.label(address(token),    "MockERC20");
+        vm.label(address(manager), "SubscriptionManager");
+        vm.label(address(token), "MockERC20");
         vm.label(address(registry), "MockKeeperRegistry");
-        vm.label(subscriber,        "Subscriber");
-        vm.label(merchant,          "Merchant");
-        vm.label(keeper,            "Keeper");
-        vm.label(stranger,          "Stranger");
+        vm.label(subscriber, "Subscriber");
+        vm.label(merchant, "Merchant");
+        vm.label(keeper, "Keeper");
+        vm.label(stranger, "Stranger");
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -61,21 +61,17 @@ contract SubscriptionManagerTest is Test {
         returns (SubscriptionTerms memory)
     {
         return SubscriptionTerms({
-            token:         token_,
-            amount:        amount_,
-            interval:      interval_,
-            trialPeriod:   0,
-            maxPayments:   0,
+            token: token_,
+            amount: amount_,
+            interval: interval_,
+            trialPeriod: 0,
+            maxPayments: 0,
             originChainId: block.chainid,
             paymentChainId: block.chainid
         });
     }
 
-    function makeEthTerms(uint256 amount_, uint48 interval_)
-        internal
-        view
-        returns (SubscriptionTerms memory)
-    {
+    function makeEthTerms(uint256 amount_, uint48 interval_) internal view returns (SubscriptionTerms memory) {
         return makeTerms(address(0), amount_, interval_);
     }
 
@@ -87,11 +83,11 @@ contract SubscriptionManagerTest is Test {
 
     function subscribeERC20WithMax(uint256 maxPayments) internal returns (bytes32) {
         SubscriptionTerms memory terms = SubscriptionTerms({
-            token:         address(token),
-            amount:        AMOUNT,
-            interval:      INTERVAL,
-            trialPeriod:   0,
-            maxPayments:   maxPayments,
+            token: address(token),
+            amount: AMOUNT,
+            interval: INTERVAL,
+            trialPeriod: 0,
+            maxPayments: maxPayments,
             originChainId: block.chainid,
             paymentChainId: block.chainid
         });
@@ -109,34 +105,34 @@ contract SubscriptionManagerTest is Test {
     // ─────────────────────────────────────────────────────────────────────────
 
     function test_Subscribe_ERC20_Success() public {
-        uint256 merchantBefore    = token.balanceOf(merchant);
-        uint256 subscriberBefore  = token.balanceOf(subscriber);
-        uint256 t0                = block.timestamp;
+        uint256 merchantBefore = token.balanceOf(merchant);
+        uint256 subscriberBefore = token.balanceOf(subscriber);
+        uint256 t0 = block.timestamp;
 
         bytes32 subId = subscribeERC20();
 
         assertNotEq(subId, bytes32(0));
-        assertEq(uint8(manager.getStatus(subId)),  uint8(Status.Active));
-        assertEq(manager.nextPaymentDue(subId),    t0 + INTERVAL);
-        assertEq(manager.getSubscriber(subId),     subscriber);
-        assertEq(manager.getMerchant(subId),       merchant);
-        assertEq(manager.getPaymentCount(subId),   1);
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+        assertEq(manager.nextPaymentDue(subId), t0 + INTERVAL);
+        assertEq(manager.getSubscriber(subId), subscriber);
+        assertEq(manager.getMerchant(subId), merchant);
+        assertEq(manager.getPaymentCount(subId), 1);
 
         // First payment collected immediately on subscribe
-        assertEq(token.balanceOf(merchant),    merchantBefore   + AMOUNT);
-        assertEq(token.balanceOf(subscriber),  subscriberBefore - AMOUNT);
+        assertEq(token.balanceOf(merchant), merchantBefore + AMOUNT);
+        assertEq(token.balanceOf(subscriber), subscriberBefore - AMOUNT);
     }
 
     function test_Subscribe_ERC20_WithTrial() public {
         uint256 merchantBefore = token.balanceOf(merchant);
-        uint256 t0             = block.timestamp;
+        uint256 t0 = block.timestamp;
 
         SubscriptionTerms memory terms = SubscriptionTerms({
-            token:         address(token),
-            amount:        AMOUNT,
-            interval:      INTERVAL,
-            trialPeriod:   TRIAL,
-            maxPayments:   0,
+            token: address(token),
+            amount: AMOUNT,
+            interval: INTERVAL,
+            trialPeriod: TRIAL,
+            maxPayments: 0,
             originChainId: block.chainid,
             paymentChainId: block.chainid
         });
@@ -145,9 +141,9 @@ contract SubscriptionManagerTest is Test {
         bytes32 subId = manager.subscribe(merchant, terms);
 
         // No payment collected during trial period
-        assertEq(token.balanceOf(merchant),  merchantBefore, "no payment during trial");
+        assertEq(token.balanceOf(merchant), merchantBefore, "no payment during trial");
         assertEq(manager.getPaymentCount(subId), 0);
-        assertEq(manager.nextPaymentDue(subId),  t0 + TRIAL);
+        assertEq(manager.nextPaymentDue(subId), t0 + TRIAL);
         assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
     }
 
@@ -178,9 +174,7 @@ contract SubscriptionManagerTest is Test {
 
         SubscriptionTerms memory terms = makeTerms(address(token), AMOUNT, INTERVAL);
         vm.prank(subscriber);
-        vm.expectRevert(
-            abi.encodeWithSelector(InsufficientAllowance.selector, subscriber, AMOUNT, uint256(0))
-        );
+        vm.expectRevert(abi.encodeWithSelector(InsufficientAllowance.selector, subscriber, AMOUNT, uint256(0)));
         manager.subscribe(merchant, terms);
     }
 
@@ -195,9 +189,7 @@ contract SubscriptionManagerTest is Test {
     function test_Subscribe_Reverts_MsgValueWithERC20() public {
         SubscriptionTerms memory terms = makeTerms(address(token), AMOUNT, INTERVAL);
         vm.prank(subscriber);
-        vm.expectRevert(
-            abi.encodeWithSelector(InvalidTerms.selector, "msg.value must be 0 for ERC-20 subscription")
-        );
+        vm.expectRevert(abi.encodeWithSelector(InvalidTerms.selector, "msg.value must be 0 for ERC-20 subscription"));
         manager.subscribe{value: 1 ether}(merchant, terms);
     }
 
@@ -214,8 +206,8 @@ contract SubscriptionManagerTest is Test {
 
         assertNotEq(subId, bytes32(0));
         assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
-        assertEq(manager.nextPaymentDue(subId),   t0 + INTERVAL);
-        assertEq(manager.getPaymentCount(subId),  1);
+        assertEq(manager.nextPaymentDue(subId), t0 + INTERVAL);
+        assertEq(manager.getPaymentCount(subId), 1);
         // First payment credited to merchant's claimable balance
         assertEq(manager.merchantEthBalance(merchant), 1 ether);
         // Subscriber's deposit is net zero (credited then immediately debited)
@@ -227,8 +219,7 @@ contract SubscriptionManagerTest is Test {
         vm.prank(subscriber);
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidTerms.selector,
-                "msg.value must equal terms.amount for ETH subscription without trial"
+                InvalidTerms.selector, "msg.value must equal terms.amount for ETH subscription without trial"
             )
         );
         manager.subscribe{value: 2 ether}(merchant, terms);
@@ -236,11 +227,11 @@ contract SubscriptionManagerTest is Test {
 
     function test_Subscribe_ETH_WithTrial_CreditsDeposit() public {
         SubscriptionTerms memory terms = SubscriptionTerms({
-            token:         address(0),
-            amount:        1 ether,
-            interval:      INTERVAL,
-            trialPeriod:   TRIAL,
-            maxPayments:   0,
+            token: address(0),
+            amount: 1 ether,
+            interval: INTERVAL,
+            trialPeriod: TRIAL,
+            maxPayments: 0,
             originChainId: block.chainid,
             paymentChainId: block.chainid
         });
@@ -249,18 +240,18 @@ contract SubscriptionManagerTest is Test {
         vm.prank(subscriber);
         bytes32 subId = manager.subscribe{value: 1 ether}(merchant, terms);
 
-        assertEq(manager.getPaymentCount(subId),        0);
-        assertEq(manager.merchantEthBalance(merchant),  0);
+        assertEq(manager.getPaymentCount(subId), 0);
+        assertEq(manager.merchantEthBalance(merchant), 0);
         assertEq(manager.ethDepositBalance(subscriber), 1 ether);
     }
 
     function test_Subscribe_ETH_WithTrial_NoValue() public {
         SubscriptionTerms memory terms = SubscriptionTerms({
-            token:         address(0),
-            amount:        1 ether,
-            interval:      INTERVAL,
-            trialPeriod:   TRIAL,
-            maxPayments:   0,
+            token: address(0),
+            amount: 1 ether,
+            interval: INTERVAL,
+            trialPeriod: TRIAL,
+            maxPayments: 0,
             originChainId: block.chainid,
             paymentChainId: block.chainid
         });
@@ -269,7 +260,7 @@ contract SubscriptionManagerTest is Test {
         vm.prank(subscriber);
         bytes32 subId = manager.subscribe{value: 0}(merchant, terms);
 
-        assertEq(manager.getPaymentCount(subId),        0);
+        assertEq(manager.getPaymentCount(subId), 0);
         assertEq(manager.ethDepositBalance(subscriber), 0);
     }
 
@@ -304,10 +295,7 @@ contract SubscriptionManagerTest is Test {
 
         vm.prank(subscriber);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                SubscriptionManager.InsufficientBalance.selector,
-                subscriber, 2 ether, 1 ether
-            )
+            abi.encodeWithSelector(SubscriptionManager.InsufficientBalance.selector, subscriber, 2 ether, 1 ether)
         );
         manager.withdrawETH(2 ether);
     }
@@ -329,10 +317,7 @@ contract SubscriptionManagerTest is Test {
     function test_ClaimMerchantETH_Reverts_NoBalance() public {
         vm.prank(merchant);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                SubscriptionManager.InsufficientBalance.selector,
-                merchant, uint256(1), uint256(0)
-            )
+            abi.encodeWithSelector(SubscriptionManager.InsufficientBalance.selector, merchant, uint256(1), uint256(0))
         );
         manager.claimMerchantETH();
     }
@@ -343,27 +328,25 @@ contract SubscriptionManagerTest is Test {
 
     function test_CollectPayment_Success() public {
         bytes32 subId = subscribeERC20();
-        uint256 merchantBefore   = token.balanceOf(merchant);
+        uint256 merchantBefore = token.balanceOf(merchant);
         uint256 subscriberBefore = token.balanceOf(subscriber);
 
         vm.warp(block.timestamp + INTERVAL + 1);
         bool success = collectAsKeeper(subId);
 
         assertTrue(success);
-        assertEq(manager.getPaymentCount(subId),    2);
-        assertEq(token.balanceOf(merchant),    merchantBefore   + AMOUNT);
-        assertEq(token.balanceOf(subscriber),  subscriberBefore - AMOUNT);
+        assertEq(manager.getPaymentCount(subId), 2);
+        assertEq(token.balanceOf(merchant), merchantBefore + AMOUNT);
+        assertEq(token.balanceOf(subscriber), subscriberBefore - AMOUNT);
     }
 
     function test_CollectPayment_Reverts_TooEarly() public {
-        bytes32 subId  = subscribeERC20();
+        bytes32 subId = subscribeERC20();
         uint256 nextPay = manager.nextPaymentDue(subId);
 
         vm.warp(nextPay - 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(PaymentIntervalNotElapsed.selector, subId, nextPay)
-        );
+        vm.expectRevert(abi.encodeWithSelector(PaymentIntervalNotElapsed.selector, subId, nextPay));
         manager.collectPayment(subId);
     }
 
@@ -374,9 +357,7 @@ contract SubscriptionManagerTest is Test {
 
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Cancelled)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Cancelled));
         manager.collectPayment(subId);
     }
 
@@ -387,9 +368,7 @@ contract SubscriptionManagerTest is Test {
 
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Paused)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Paused));
         manager.collectPayment(subId);
     }
 
@@ -451,9 +430,7 @@ contract SubscriptionManagerTest is Test {
         // Next attempt hits maxPayments guard — hard revert
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Expired)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Expired));
         manager.collectPayment(subId);
 
         // The status write inside the guard was rolled back with the revert
@@ -485,7 +462,7 @@ contract SubscriptionManagerTest is Test {
         bool success = collectAsKeeper(subId);
 
         assertTrue(success);
-        assertEq(manager.getPaymentCount(subId),       2);
+        assertEq(manager.getPaymentCount(subId), 2);
         assertEq(manager.merchantEthBalance(merchant), 2 ether);
         assertEq(manager.ethDepositBalance(subscriber), 0);
     }
@@ -518,9 +495,7 @@ contract SubscriptionManagerTest is Test {
         // Further collect attempts must revert
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Cancelled)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Cancelled));
         manager.collectPayment(subId);
     }
 
@@ -558,9 +533,7 @@ contract SubscriptionManagerTest is Test {
         // collectPayment must revert while paused
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Paused)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Paused));
         manager.collectPayment(subId);
 
         // Resume
@@ -591,9 +564,7 @@ contract SubscriptionManagerTest is Test {
         manager.pauseSubscription(subId);
 
         vm.prank(subscriber);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Paused)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Paused));
         manager.pauseSubscription(subId);
     }
 
@@ -601,9 +572,7 @@ contract SubscriptionManagerTest is Test {
         bytes32 subId = subscribeERC20();
 
         vm.prank(subscriber);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Active)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Active));
         manager.resumeSubscription(subId);
     }
 
@@ -646,24 +615,24 @@ contract SubscriptionManagerTest is Test {
 
     function test_GetTerms() public {
         SubscriptionTerms memory terms = SubscriptionTerms({
-            token:          address(token),
-            amount:         AMOUNT,
-            interval:       INTERVAL,
-            trialPeriod:    TRIAL,
-            maxPayments:    5,
-            originChainId:  block.chainid,
+            token: address(token),
+            amount: AMOUNT,
+            interval: INTERVAL,
+            trialPeriod: TRIAL,
+            maxPayments: 5,
+            originChainId: block.chainid,
             paymentChainId: block.chainid
         });
         vm.prank(subscriber);
         bytes32 subId = manager.subscribe(merchant, terms);
 
         SubscriptionTerms memory stored = manager.getTerms(subId);
-        assertEq(stored.token,          address(token));
-        assertEq(stored.amount,         AMOUNT);
-        assertEq(stored.interval,       INTERVAL);
-        assertEq(stored.trialPeriod,    TRIAL);
-        assertEq(stored.maxPayments,    5);
-        assertEq(stored.originChainId,  block.chainid);
+        assertEq(stored.token, address(token));
+        assertEq(stored.amount, AMOUNT);
+        assertEq(stored.interval, INTERVAL);
+        assertEq(stored.trialPeriod, TRIAL);
+        assertEq(stored.maxPayments, 5);
+        assertEq(stored.originChainId, block.chainid);
         assertEq(stored.paymentChainId, block.chainid);
     }
 
@@ -758,7 +727,7 @@ contract SubscriptionManagerTest is Test {
         vm.prank(subscriber);
         manager.cancelSubscription(subId);
 
-        assertEq(receiver.cancelCallCount(),    1);
+        assertEq(receiver.cancelCallCount(), 1);
         assertEq(receiver.lastCancelledSubId(), subId);
     }
 
@@ -883,14 +852,12 @@ contract SubscriptionManagerTest is Test {
         // The next collect attempt must hit the maxPayments guard and revert
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Expired)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Expired));
         manager.collectPayment(subId);
     }
 
     function testFuzz_CannotCollectTwiceInSamePeriod(uint256 warpTime) public {
-        bytes32 subId  = subscribeERC20();
+        bytes32 subId = subscribeERC20();
         uint256 nextPay = manager.nextPaymentDue(subId);
 
         // Warp to strictly before the next payment timestamp
@@ -898,14 +865,12 @@ contract SubscriptionManagerTest is Test {
         vm.warp(block.timestamp + warpTime);
 
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(PaymentIntervalNotElapsed.selector, subId, nextPay)
-        );
+        vm.expectRevert(abi.encodeWithSelector(PaymentIntervalNotElapsed.selector, subId, nextPay));
         manager.collectPayment(subId);
     }
 
     function testFuzz_ETH_AnyDepositAndWithdraw(uint256 depositAmt, uint256 withdrawAmt) public {
-        depositAmt  = bound(depositAmt,  1, 50 ether);
+        depositAmt = bound(depositAmt, 1, 50 ether);
         withdrawAmt = bound(withdrawAmt, 1, depositAmt);
 
         vm.deal(subscriber, depositAmt);

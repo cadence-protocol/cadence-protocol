@@ -69,11 +69,7 @@ error UnauthorizedCaller(address caller);
 /// @param subscriber The subscriber address
 /// @param required The amount required for the payment
 /// @param available The allowance currently granted
-error InsufficientAllowance(
-    address subscriber,
-    uint256 required,
-    uint256 available
-);
+error InsufficientAllowance(address subscriber, uint256 required, uint256 available);
 
 /// @notice Thrown when subscription terms contain invalid values
 /// @param reason Human-readable description of the validation failure
@@ -100,10 +96,7 @@ interface ISubscription {
     /// @param merchant   Address of the merchant receiving payments
     /// @param terms      The agreed-upon subscription terms
     event SubscriptionCreated(
-        bytes32 indexed subId,
-        address indexed subscriber,
-        address indexed merchant,
-        SubscriptionTerms terms
+        bytes32 indexed subId, address indexed subscriber, address indexed merchant, SubscriptionTerms terms
     );
 
     /// @notice Emitted when a payment is successfully collected
@@ -111,42 +104,25 @@ interface ISubscription {
     /// @param amount    Amount collected in token's smallest unit
     /// @param token     Token address used for payment (address(0) = native ETH)
     /// @param timestamp Unix timestamp of the payment
-    event PaymentCollected(
-        bytes32 indexed subId,
-        uint256 amount,
-        address token,
-        uint256 timestamp
-    );
+    event PaymentCollected(bytes32 indexed subId, uint256 amount, address token, uint256 timestamp);
 
     /// @notice Emitted when a subscription is cancelled
     /// @param subId       Subscription identifier
     /// @param cancelledBy Address that triggered the cancellation
     /// @param timestamp   Unix timestamp of the cancellation
-    event SubscriptionCancelled(
-        bytes32 indexed subId,
-        address cancelledBy,
-        uint256 timestamp
-    );
+    event SubscriptionCancelled(bytes32 indexed subId, address cancelledBy, uint256 timestamp);
 
     /// @notice Emitted when a payment attempt fails
     /// @param subId     Subscription identifier
     /// @param timestamp Unix timestamp of the failed attempt
     /// @param reason    Human-readable failure reason
-    event PaymentFailed(
-        bytes32 indexed subId,
-        uint256 timestamp,
-        string reason
-    );
+    event PaymentFailed(bytes32 indexed subId, uint256 timestamp, string reason);
 
     /// @notice Emitted when a subscription is paused
     /// @param subId     Subscription identifier
     /// @param pausedBy  Address that triggered the pause
     /// @param timestamp Unix timestamp of the pause
-    event SubscriptionPaused(
-        bytes32 indexed subId,
-        address pausedBy,
-        uint256 timestamp
-    );
+    event SubscriptionPaused(bytes32 indexed subId, address pausedBy, uint256 timestamp);
 
     /// @notice Emitted when a paused subscription is resumed
     /// @param subId     Subscription identifier
@@ -161,10 +137,7 @@ interface ISubscription {
     /// @param merchant Address of the merchant to subscribe to
     /// @param terms    Agreed subscription terms
     /// @return subId   Unique identifier for the created subscription
-    function subscribe(
-        address merchant,
-        SubscriptionTerms calldata terms
-    ) external payable returns (bytes32 subId);
+    function subscribe(address merchant, SubscriptionTerms calldata terms) external payable returns (bytes32 subId);
 
     /// @notice Collect the next due payment for a subscription
     /// @dev Reverts with {PaymentIntervalNotElapsed} if called too early.
@@ -199,16 +172,12 @@ interface ISubscription {
     /// @notice Return the Unix timestamp at which the next payment is due
     /// @param subId     Subscription identifier
     /// @return timestamp Unix timestamp of the next payment
-    function nextPaymentDue(
-        bytes32 subId
-    ) external view returns (uint256 timestamp);
+    function nextPaymentDue(bytes32 subId) external view returns (uint256 timestamp);
 
     /// @notice Return the full terms of a subscription
     /// @param subId Subscription identifier
     /// @return      The {SubscriptionTerms} struct for this subscription
-    function getTerms(
-        bytes32 subId
-    ) external view returns (SubscriptionTerms memory);
+    function getTerms(bytes32 subId) external view returns (SubscriptionTerms memory);
 
     /// @notice Return the subscriber address for a subscription
     /// @param subId Subscription identifier
@@ -248,11 +217,7 @@ interface ISubscriptionReceiver {
     /// @param amount Amount collected in token's smallest unit
     /// @param token  Token address (address(0) = native ETH)
     /// @return       Must return `ISubscriptionReceiver.onPaymentCollected.selector`
-    function onPaymentCollected(
-        bytes32 subId,
-        uint256 amount,
-        address token
-    ) external returns (bytes4);
+    function onPaymentCollected(bytes32 subId, uint256 amount, address token) external returns (bytes4);
 
     /// @notice Called by the subscription contract after a subscription is cancelled
     /// @param subId Subscription identifier
