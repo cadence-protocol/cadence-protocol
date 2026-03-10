@@ -1,8 +1,8 @@
 ---
 eip: <TBD>
-title: Standard Interface for Onchain Recurring Payments
-description: A minimal interface for pull-based subscription billing with lifecycle management, keeper-gated collection, and optional extension interfaces for trials, tiers, discovery, and dunning.
-author: Mike Chasseur <info@cadenceprotocol.build>
+title: Interface for Onchain Recurring Payments
+description: Minimal interface for pull-based onchain subscription billing with lifecycle management and keeper-gated payment collection.
+author: Mike Chasseur (@chasseurmic) <chasseurmic@gmail.com>
 discussions-to: https://ethereum-magicians.org/t/erc-standard-interface-for-onchain-recurring-payments/27946
 status: Draft
 type: Standards Track
