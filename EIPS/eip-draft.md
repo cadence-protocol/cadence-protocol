@@ -13,7 +13,7 @@ requires: 165
 
 ## Abstract
 
-This ERC defines a standard interface — `ISubscription` — for onchain recurring payment contracts. It specifies how subscriptions are created, how payments are collected by authorised keeper networks, how the subscription lifecycle is managed (pause, resume, cancel), and how status is exposed to external consumers. The interface supports both ERC-20 token payments and native ETH, includes optional merchant callbacks via `ISubscriptionReceiver`, and is designed for cross-chain portability through `bytes32` subscription identifiers derived from chain-aware inputs. Four optional extension interfaces (`ISubscriptionTrial`, `ISubscriptionTiered`, `ISubscriptionDiscovery`, `ISubscriptionHook`) are defined for implementations that require advanced capabilities beyond the core billing loop.
+This ERC defines a standard interface — `ISubscription` — for onchain recurring payment contracts. It specifies how subscriptions are created, how payments are collected by authorised keeper networks, how the subscription lifecycle is managed (pause, resume, cancel), and how status is exposed to external consumers. The interface supports both [ERC-20](./erc-20.md) token payments and native ETH, includes optional merchant callbacks via `ISubscriptionReceiver`, and is designed for cross-chain portability through `bytes32` subscription identifiers derived from chain-aware inputs. Four optional extension interfaces (`ISubscriptionTrial`, `ISubscriptionTiered`, `ISubscriptionDiscovery`, `ISubscriptionHook`) are defined for implementations that require advanced capabilities beyond the core billing loop.
 
 ---
 
@@ -28,7 +28,7 @@ The absence of a standard has produced a fragmented landscape:
 - **Users cannot compare.** Subscribers have no way to enumerate their active recurring commitments across protocols, because there is no shared interface to query.
 - **Cross-chain support is absent.** Existing implementations are single-chain, with no provision for subscriptions that originate on one chain and are settled on another.
 
-Previous work — most notably ERC-1337 — proposed subscription standards but relied on off-chain signed messages and meta-transaction relays, which introduce off-chain coordination dependencies and are poorly suited to the current environment where on-chain automation (keeper networks, EIP-4337 account abstraction, scheduled transactions) is readily available and where L2 transaction costs make fully on-chain pull payments economically viable.
+Previous work — most notably [ERC-1337](./erc-1337.md) — proposed subscription standards but relied on off-chain signed messages and meta-transaction relays, which introduce off-chain coordination dependencies and are poorly suited to the current environment where on-chain automation (keeper networks, [EIP-4337](./eip-4337.md) account abstraction, scheduled transactions) is readily available and where L2 transaction costs make fully on-chain pull payments economically viable.
 
 This ERC specifies a minimal, opinionated interface that:
 
@@ -36,7 +36,7 @@ This ERC specifies a minimal, opinionated interface that:
 2. Provides a **full subscription lifecycle** (active, paused, past-due, cancelled, expired) queryable on-chain.
 3. Uses **keeper-gated collection** to protect against payment timing manipulation and griefing.
 4. Is **cross-chain portable** via deterministic `bytes32` subscription identifiers.
-5. Remains **deliberately minimal** at the core, with advanced capabilities delegated to optional extension interfaces discovered via ERC-165.
+5. Remains **deliberately minimal** at the core, with advanced capabilities delegated to optional extension interfaces discovered via [ERC-165](./erc-165.md).
 
 ---
 
@@ -447,7 +447,7 @@ When an ERC-20 allowance is insufficient or an ETH deposit is underfunded, `coll
 
 ### Optional Extension Interfaces
 
-A monolithic interface including trials, tiers, discovery, and dunning hooks would impose implementation costs on every conforming contract regardless of need. A minimal SaaS contract needs nothing beyond `ISubscription`. A creator platform adds `ISubscriptionTrial`. A DAO governance product adds `ISubscriptionTiered`. The extension model follows the precedent of ERC-721 (base interface + `IERC721Enumerable` + `IERC721Metadata`): a contract declares support for an extension via ERC-165 `supportsInterface()`, and external consumers probe for capability at runtime. Unlike ERC-721, the Cadence extensions are defined in separate interface files to keep the core EIP specification minimal and to allow future extensions to be proposed as independent EIPs without modifying the base standard.
+A monolithic interface including trials, tiers, discovery, and dunning hooks would impose implementation costs on every conforming contract regardless of need. A minimal SaaS contract needs nothing beyond `ISubscription`. A creator platform adds `ISubscriptionTrial`. A DAO governance product adds `ISubscriptionTiered`. The extension model follows the precedent of [ERC-721](./erc-721.md) (base interface + `IERC721Enumerable` + `IERC721Metadata`): a contract declares support for an extension via ERC-165 `supportsInterface()`, and external consumers probe for capability at runtime. Unlike ERC-721, the Cadence extensions are defined in separate interface files to keep the core EIP specification minimal and to allow future extensions to be proposed as independent EIPs without modifying the base standard.
 
 ### `ISubscriptionReceiver` vs. `ISubscriptionHook`
 
@@ -545,9 +545,7 @@ The following test cases define normative behaviour that any conforming `ISubscr
 
 ## Reference Implementation
 
-A complete reference implementation is available at:
-
-[https://github.com/cadence-protocol/cadence-protocol](https://github.com/cadence-protocol/cadence-protocol)
+A complete reference implementation is available at `https://github.com/cadence-protocol/cadence-protocol`.
 
 The repository includes:
 
@@ -576,7 +574,7 @@ A compromised global keeper can trigger `collectPayment()` for any due subscript
 
 ### ERC-20 Allowance Risks
 
-Infinite approvals (`type(uint256).max`) expose the subscriber's entire token balance to the contract. Implementations SHOULD recommend exact per-period approvals or EIP-2612 `permit` signatures (which limit exposure to a single transaction's window). Fee-on-transfer tokens result in merchants receiving less than `terms.amount`; implementations MUST document their handling of this case. Rebasing tokens (e.g. stETH) are unsuitable as payment tokens unless the implementation explicitly tracks balance changes; the fixed `amount` field does not adjust with rebases.
+Infinite approvals (`type(uint256).max`) expose the subscriber's entire token balance to the contract. Implementations SHOULD recommend exact per-period approvals or [EIP-2612](./eip-2612.md) `permit` signatures (which limit exposure to a single transaction's window). Fee-on-transfer tokens result in merchants receiving less than `terms.amount`; implementations MUST document their handling of this case. Rebasing tokens (e.g. stETH) are unsuitable as payment tokens unless the implementation explicitly tracks balance changes; the fixed `amount` field does not adjust with rebases.
 
 ### ETH Escrow
 
