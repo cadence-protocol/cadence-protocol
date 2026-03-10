@@ -14,21 +14,64 @@ Cadence defines a standard interface for onchain subscriptions — native pull p
 
 ## Status
 
-🚧 **FASE 1 — Interface Design** (in progress)
+✅ **Phase 1 — Core Implementation** (complete)
 
-The `ISubscription` interface and supporting types are currently being designed. Community discussion will open on Ethereum Magicians before formal EIP submission.
+The `ISubscription` interface, `SubscriptionManager` reference implementation, and `KeeperRegistry` are complete with a full Foundry test suite achieving ≥95% line coverage across all source contracts.
 
 ## Repository Structure
 
 ```
 src/
-  interfaces/       # ISubscription and optional extensions
-  SubscriptionManager.sol
-  SubscriptionRegistry.sol
-  KeeperRegistry.sol
-test/               # Foundry test suite (target: ≥95% coverage)
-script/             # Deploy scripts (CREATE2, multi-chain)
+  interfaces/
+    ISubscription.sol       # Core interface: structs, enums, events, errors, ERC-165
+  SubscriptionManager.sol   # Reference implementation (ISubscription + ETH escrow)
+  KeeperRegistry.sol        # Keeper authorisation registry (global + per-merchant)
+test/
+  SubscriptionManager.t.sol # Unit + fuzz tests (60 tests)
+  KeeperRegistry.t.sol      # Unit tests (30 tests)
+  invariants/
+    SubscriptionInvariant.t.sol  # Foundry invariant suite (4 invariants)
+  mocks/
+    MockERC20.sol
+    MockKeeperRegistry.sol
+    MockSubscriptionReceiver.sol
+docs/
+  rationale.md              # EIP design rationale
 ```
+
+## Contracts
+
+### ISubscription (`src/interfaces/ISubscription.sol`)
+
+Defines the standard interface all conforming subscription managers must implement.
+
+- **`SubscriptionTerms`** — token, amount, interval, trialPeriod, maxPayments, originChainId, paymentChainId
+- **`Status`** — `Active | PastDue | Paused | Cancelled | Expired`
+- **`ISubscriptionReceiver`** — optional merchant callback interface (`onPaymentCollected`, `onSubscriptionCancelled`)
+- **ERC-165** — `CADENCE_INTERFACE_ID` constant for interface detection
+
+### SubscriptionManager (`src/SubscriptionManager.sol`)
+
+Reference implementation of `ISubscription`.
+
+- ERC-20 and native ETH payment support
+- Pull-payment ETH escrow (subscriber deposits, merchant claims)
+- Trial period support (first payment deferred)
+- Optional `maxPayments` cap with automatic expiry
+- Keeper-gated `collectPayment` via `IKeeperRegistry` (pass `address(0)` for permissionless)
+- Optional merchant callbacks via `ISubscriptionReceiver` with `try/catch` isolation
+- Reentrancy-guarded via OpenZeppelin `ReentrancyGuard`
+- Checks-Effects-Interactions throughout
+
+### KeeperRegistry (`src/KeeperRegistry.sol`)
+
+Two-tier keeper authorisation registry.
+
+- **Global keepers** — authorised by owner for all merchants (via `addKeeper`)
+- **Merchant keepers** — authorised by each merchant for their own subscriptions (via `addMerchantKeeper`)
+- **Blacklist** — owner can permanently block a keeper address from both tiers
+- `isAuthorised(address keeper, address merchant)` — single read combining both tiers and blacklist
+- `Ownable2Step` for safe ownership transfers
 
 ## Development
 
@@ -40,11 +83,18 @@ forge install
 forge build
 
 # Test
-forge test
+forge test -vv
 
-# Coverage
+# Coverage report
 forge coverage
+
+# Run invariant suite only
+forge test --match-contract SubscriptionInvariantTest -vv
 ```
+
+## Design Rationale
+
+See [docs/rationale.md](docs/rationale.md) for the reasoning behind key design decisions: bytes32 subscription IDs, pull-payment ETH model, soft-fail collection, PastDue as a computed status, and trial period handling.
 
 ## Links
 
