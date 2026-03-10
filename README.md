@@ -6,17 +6,22 @@ Cadence defines a standard interface for onchain subscriptions — native pull p
 
 ## Overview
 
-| Layer | Description |
-|-------|-------------|
-| **ERC Standard** | `ISubscription` interface — subscribe, collectPayment, cancel, pause, resume, getStatus |
-| **Automation Service** | Keeper network, scheduler, dunning manager, Stripe-compatible webhooks |
-| **SDK & Tooling** | TypeScript SDK, The Graph subgraph, React hooks, CLI |
+| Layer                  | Description                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| **ERC Standard**       | `ISubscription` interface — subscribe, collectPayment, cancel, pause, resume, getStatus |
+| **Automation Service** | Keeper network, scheduler, dunning manager, Stripe-compatible webhooks                  |
+| **SDK & Tooling**      | TypeScript SDK, The Graph subgraph, React hooks, CLI                                    |
 
 ## Status
 
-✅ **Phase 1 — Core Implementation** (complete)
-
-The `ISubscription` interface, `SubscriptionManager` reference implementation, and `KeeperRegistry` are complete with a full Foundry test suite achieving ≥95% line coverage across all source contracts.
+| Phase                           | Description                                                                                          | Status      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------- |
+| **1 — Core ERC Standard**       | `ISubscription` interface, `SubscriptionManager`, `KeeperRegistry`, Foundry test suite ≥95% coverage | ✅ Complete |
+| **2 — EIP Submission**          | Ethereum Magicians discussion thread, formal EIP pull request, editor review                         | 🔜 Next     |
+| **3 — Documentation & Tooling** | Specification site, TypeScript SDK (`@cadenceprotocol/sdk`), The Graph subgraph, CLI                 | ⏳ Planned  |
+| **4 — Automation Service**      | Keeper network, scheduler, dunning manager, Stripe-compatible webhooks, merchant dashboard           | ⏳ Planned  |
+| **5 — Security**                | Automated analysis (Slither, Aderyn), formal audit (Sherlock / Code4rena), Immunefi bounty           | ⏳ Planned  |
+| **6 — Ecosystem Adoption**      | Early integrator onboarding, ecosystem grants, cross-chain via ERC-7683                              | ⏳ Planned  |
 
 ## Repository Structure
 
@@ -99,7 +104,7 @@ See [docs/rationale.md](docs/rationale.md) for the reasoning behind key design d
 ## Links
 
 - Website: [cadenceprotocol.build](https://cadenceprotocol.build)
-- Discussion: Ethereum Magicians *(coming soon)*
+- Discussion: Ethereum Magicians _(coming soon)_
 - X: [@cadencefinance](https://x.com/cadencefinance)
 
 ## License
