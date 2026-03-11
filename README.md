@@ -16,7 +16,7 @@ Cadence defines a standard interface for onchain subscriptions — native pull p
 
 | Phase                           | Description                                                                                          | Status      |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------- | ----------- |
-| **1 — Core ERC Standard**       | `ISubscription` interface, `SubscriptionManager`, `KeeperRegistry`, Foundry test suite ≥95% coverage | ✅ Complete |
+| **1 — Core ERC Standard**       | `ISubscription` interface, `SubscriptionManager`, `KeeperRegistry`, Foundry test suite — 94 tests, 100% line coverage on production contracts | ✅ Complete |
 | **2 — EIP Submission**          | Ethereum Magicians discussion thread, formal EIP pull request, editor review                         | 🔄 In Progress |
 | **3 — Documentation & Tooling** | Specification site, TypeScript SDK (`@cadenceprotocol/sdk`), The Graph subgraph, CLI                 | ⏳ Planned  |
 | **4 — Automation Service**      | Keeper network, scheduler, dunning manager, Stripe-compatible webhooks, merchant dashboard           | ⏳ Planned  |
@@ -78,6 +78,17 @@ Two-tier keeper authorisation registry.
 - `isAuthorised(address keeper, address merchant)` — single read combining both tiers and blacklist
 - `Ownable2Step` for safe ownership transfers
 
+## Deployments
+
+### Sepolia Testnet
+
+| Contract | Address |
+| -------- | ------- |
+| `KeeperRegistry` | [`0x395CcdeFC1fCB34BB6431543555eD17468b52014`](https://sepolia.etherscan.io/address/0x395CcdeFC1fCB34BB6431543555eD17468b52014) |
+| `SubscriptionManager` | [`0xF6528b6a1b98F287762eF21e633F04fB74F70A50`](https://sepolia.etherscan.io/address/0xF6528b6a1b98F287762eF21e633F04fB74F70A50) |
+
+Both contracts are verified on Etherscan. Full deployment metadata in [`deployments.json`](./deployments.json).
+
 ## Development
 
 ```bash
@@ -96,6 +107,15 @@ forge coverage
 # Run invariant suite only
 forge test --match-contract SubscriptionInvariantTest -vv
 ```
+
+### Test Coverage
+
+| Contract | Lines | Statements | Branches | Functions |
+| -------- | ----- | ---------- | -------- | --------- |
+| `KeeperRegistry.sol` | 100% | 100% | 100% | 100% |
+| `SubscriptionManager.sol` | 100% | 100% | 95.45% | 100% |
+
+94 tests total: 60 unit/fuzz (`SubscriptionManager`), 30 unit (`KeeperRegistry`), 4 invariants (256 runs × 128k calls each).
 
 ## Design Rationale
 
