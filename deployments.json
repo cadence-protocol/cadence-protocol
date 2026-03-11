@@ -1,19 +1,25 @@
 {
   "sepolia": {
     "chainId": 11155111,
-    "deployedAt": "2026-03-11",
+    "deployedAt": "2026-03-12",
     "contracts": {
       "KeeperRegistry": {
-        "address": "0x395CcdeFC1fCB34BB6431543555eD17468b52014",
-        "tx": "0xda84d5708e711a6dcac09e7e99b505c443809dca167b4106276bc73c3a956725",
-        "block": 10426536,
-        "etherscan": "https://sepolia.etherscan.io/address/0x395CcdeFC1fCB34BB6431543555eD17468b52014"
+        "address": "0x9Ff8f7493bE5Afbd7b5Ff7a5DC6df73b33BeC128",
+        "tx": "0x36b61fee4d0059577f9014f9487e01717789379aae7a367052e5f754d4763793",
+        "block": 10429583,
+        "etherscan": "https://sepolia.etherscan.io/address/0x9Ff8f7493bE5Afbd7b5Ff7a5DC6df73b33BeC128"
       },
       "SubscriptionManager": {
-        "address": "0xF6528b6a1b98F287762eF21e633F04fB74F70A50",
-        "tx": "0x27dbf89a43885db6f0ce1e4332b4c482eae72aead8e86262f5fe871b58373e07",
-        "block": 10426536,
-        "etherscan": "https://sepolia.etherscan.io/address/0xF6528b6a1b98F287762eF21e633F04fB74F70A50"
+        "address": "0x4618AeaDf531f8D415b02CB3DD46420Cd92AB050",
+        "tx": "0x16b0e9f2734975238e00e32a4ac092e4749c8ce19d1aae2f52b68dcc6c47f105",
+        "block": 10429583,
+        "etherscan": "https://sepolia.etherscan.io/address/0x4618AeaDf531f8D415b02CB3DD46420Cd92AB050"
+      },
+      "CadenceUSD": {
+        "address": "0xd3D94A29521c5b7358D4EF9e4B87b24A90abeCB4",
+        "tx": "0x9543e4b48e95d5e1b92b20d8b07f9ace01125a023c09d32471a089588eccac81",
+        "block": 10429583,
+        "etherscan": "https://sepolia.etherscan.io/address/0xd3D94A29521c5b7358D4EF9e4B87b24A90abeCB4"
       }
     }
   }

@@ -84,8 +84,8 @@ Two-tier keeper authorisation registry.
 
 | Contract | Address |
 | -------- | ------- |
-| `KeeperRegistry` | [`0x395CcdeFC1fCB34BB6431543555eD17468b52014`](https://sepolia.etherscan.io/address/0x395CcdeFC1fCB34BB6431543555eD17468b52014) |
-| `SubscriptionManager` | [`0xF6528b6a1b98F287762eF21e633F04fB74F70A50`](https://sepolia.etherscan.io/address/0xF6528b6a1b98F287762eF21e633F04fB74F70A50) |
+| `KeeperRegistry` | [`0x9Ff8f7493bE5Afbd7b5Ff7a5DC6df73b33BeC128`](https://sepolia.etherscan.io/address/0x9Ff8f7493bE5Afbd7b5Ff7a5DC6df73b33BeC128) |
+| `SubscriptionManager` | [`0x4618AeaDf531f8D415b02CB3DD46420Cd92AB050`](https://sepolia.etherscan.io/address/0x4618AeaDf531f8D415b02CB3DD46420Cd92AB050) |
 
 Both contracts are verified on Etherscan. Full deployment metadata in [`deployments.json`](./deployments.json).
 

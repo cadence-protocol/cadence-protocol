@@ -182,6 +182,18 @@ contract KeeperRegistry is Ownable2Step {
         return _globalKeepers.contains(caller) || _merchantKeepers[merchant].contains(caller);
     }
 
+    /// @notice Global-only authorisation check (no merchant context).
+    /// @dev Satisfies the single-parameter IKeeperRegistry interface used by
+    ///      SubscriptionManager. Only checks global keepers; per-merchant custom
+    ///      keepers are not visible through this function.
+    ///      Returns true if `caller` is not blacklisted AND is a registered global keeper.
+    /// @param caller Address attempting to collect the payment
+    /// @return       True if the caller is a global keeper; false otherwise
+    function isAuthorized(address caller) external view returns (bool) {
+        if (_blacklisted[caller]) return false;
+        return _globalKeepers.contains(caller);
+    }
+
     // ─────────────────────────────────────────────
     // Views
     // ─────────────────────────────────────────────
