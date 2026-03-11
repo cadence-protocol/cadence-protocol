@@ -1,0 +1,20 @@
+{
+  "sepolia": {
+    "chainId": 11155111,
+    "deployedAt": "2026-03-11",
+    "contracts": {
+      "KeeperRegistry": {
+        "address": "0x395CcdeFC1fCB34BB6431543555eD17468b52014",
+        "tx": "0xda84d5708e711a6dcac09e7e99b505c443809dca167b4106276bc73c3a956725",
+        "block": 10426536,
+        "etherscan": "https://sepolia.etherscan.io/address/0x395CcdeFC1fCB34BB6431543555eD17468b52014"
+      },
+      "SubscriptionManager": {
+        "address": "0xF6528b6a1b98F287762eF21e633F04fB74F70A50",
+        "tx": "0x27dbf89a43885db6f0ce1e4332b4c482eae72aead8e86262f5fe871b58373e07",
+        "block": 10426536,
+        "etherscan": "https://sepolia.etherscan.io/address/0xF6528b6a1b98F287762eF21e633F04fB74F70A50"
+      }
+    }
+  }
+}
