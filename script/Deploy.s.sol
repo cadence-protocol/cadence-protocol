@@ -12,7 +12,7 @@ import {CadenceUSD} from "../src/CadenceUSD.sol";
 ///      forge script script/Deploy.s.sol --rpc-url sepolia --broadcast --verify -vvvv
 contract Deploy is Script {
     function run() external {
-        uint256 pk      = vm.envUint("PRIVATE_KEY");
+        uint256 pk = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(pk);
 
         vm.startBroadcast(pk);
