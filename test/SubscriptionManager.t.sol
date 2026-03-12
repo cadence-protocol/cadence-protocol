@@ -9,6 +9,9 @@ import {MockKeeperRegistry} from "./mocks/MockKeeperRegistry.sol";
 import {MockSubscriptionReceiver, NonERC165Contract} from "./mocks/MockSubscriptionReceiver.sol";
 
 contract SubscriptionManagerTest is Test {
+    // ─── Events (re-declared for vm.expectEmit) ───────────────────────────────
+    event SubscriptionExpired(bytes32 indexed subId, uint256 timestamp);
+
     // ─── Contracts ────────────────────────────────────────────────────────────
 
     SubscriptionManager public manager;
