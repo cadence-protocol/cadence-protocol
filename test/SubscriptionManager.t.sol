@@ -427,15 +427,16 @@ contract SubscriptionManagerTest is Test {
         }
         assertEq(manager.getPaymentCount(subId), 3);
 
-        // Next attempt hits maxPayments guard — hard revert
+        // Next attempt hits maxPayments guard — soft fail: returns false, persists Expired
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Expired));
-        manager.collectPayment(subId);
+        vm.expectEmit(true, false, false, false);
+        emit SubscriptionExpired(subId, 0);
+        bool result = manager.collectPayment(subId);
 
-        // The status write inside the guard was rolled back with the revert
-        // paymentCount is unchanged
-        assertEq(manager.getPaymentCount(subId), 3);
+        assertFalse(result, "should return false when maxPayments reached");
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Expired), "status should be Expired");
+        assertEq(manager.getPaymentCount(subId), 3, "paymentCount unchanged");
     }
 
     function test_CollectPayment_Reverts_NonExistent() public {
@@ -849,11 +850,15 @@ contract SubscriptionManagerTest is Test {
         }
         assertEq(manager.getPaymentCount(subId), rounds);
 
-        // The next collect attempt must hit the maxPayments guard and revert
+        // The next collect attempt hits maxPayments guard — soft fail
         vm.warp(block.timestamp + INTERVAL + 1);
         vm.prank(keeper);
-        vm.expectRevert(abi.encodeWithSelector(SubscriptionNotActive.selector, subId, Status.Expired));
-        manager.collectPayment(subId);
+        vm.expectEmit(true, false, false, false);
+        emit SubscriptionExpired(subId, 0);
+        bool expired = manager.collectPayment(subId);
+
+        assertFalse(expired, "should return false when maxPayments reached");
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Expired), "status should be Expired");
     }
 
     function testFuzz_CannotCollectTwiceInSamePeriod(uint256 warpTime) public {
