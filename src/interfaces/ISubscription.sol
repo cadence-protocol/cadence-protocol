@@ -129,6 +129,11 @@ interface ISubscription {
     /// @param timestamp Unix timestamp of the resumption
     event SubscriptionResumed(bytes32 indexed subId, uint256 timestamp);
 
+    /// @notice Emitted when a subscription reaches its maxPayments limit and is set to Expired.
+    /// @param subId     Subscription identifier
+    /// @param timestamp Unix timestamp of expiration
+    event SubscriptionExpired(bytes32 indexed subId, uint256 timestamp);
+
     // ─── Core Lifecycle ────────────────────────
 
     /// @notice Create a new subscription between the caller (subscriber) and a merchant

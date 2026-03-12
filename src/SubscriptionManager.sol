@@ -299,10 +299,13 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
             revert PaymentIntervalNotElapsed(subId, sub.nextPaymentAt);
         }
 
-        // Max-payments guard: expire and hard-revert
+        // Max-payments guard: soft-fail so the status change persists on-chain.
+        // Hard-reverting here would roll back the Expired status write, leaving the
+        // subscription stuck in Active/PastDue and causing keepers to retry forever.
         if (sub.terms.maxPayments > 0 && sub.paymentCount >= sub.terms.maxPayments) {
             sub.status = Status.Expired;
-            revert SubscriptionNotActive(subId, Status.Expired);
+            emit SubscriptionExpired(subId, block.timestamp);
+            return false;
         }
 
         if (sub.terms.token == address(0)) {
