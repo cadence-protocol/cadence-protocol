@@ -891,4 +891,198 @@ contract SubscriptionManagerTest is Test {
 
         assertEq(manager.ethDepositBalance(subscriber), depositAmt - withdrawAmt);
     }
+
+    function testFuzz_Subscribe_WithTrialPeriod(uint48 trialPeriod) public {
+        trialPeriod = uint48(bound(trialPeriod, 1, 365 days));
+        uint256 t0 = block.timestamp;
+
+        SubscriptionTerms memory terms = SubscriptionTerms({
+            token: address(token),
+            amount: AMOUNT,
+            interval: INTERVAL,
+            trialPeriod: trialPeriod,
+            maxPayments: 0,
+            originChainId: block.chainid,
+            paymentChainId: block.chainid
+        });
+
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe(merchant, terms);
+
+        assertEq(manager.getPaymentCount(subId), 0, "no payment during trial");
+        assertEq(manager.nextPaymentDue(subId), t0 + trialPeriod, "nextPayment after trial");
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+    }
+
+    function testFuzz_Subscribe_ETH_AnyAmount(uint256 amount) public {
+        amount = bound(amount, 1, 50 ether);
+        vm.deal(subscriber, amount);
+
+        SubscriptionTerms memory terms = makeEthTerms(amount, INTERVAL);
+
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: amount}(merchant, terms);
+
+        assertEq(manager.getPaymentCount(subId), 1);
+        assertEq(manager.merchantEthBalance(merchant), amount);
+        assertEq(manager.ethDepositBalance(subscriber), 0);
+    }
+
+    function testFuzz_CollectPayment_ETH_MultipleRounds(uint8 rounds) public {
+        rounds = uint8(bound(rounds, 1, 10));
+        uint256 ethAmount = 1 ether;
+
+        vm.deal(subscriber, ethAmount * (uint256(rounds) + 1));
+
+        SubscriptionTerms memory terms = makeEthTerms(ethAmount, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: ethAmount}(merchant, terms);
+
+        // Pre-fund for remaining rounds
+        vm.prank(subscriber);
+        manager.depositETH{value: ethAmount * uint256(rounds)}();
+
+        for (uint256 i = 0; i < rounds; i++) {
+            vm.warp(block.timestamp + INTERVAL + 1);
+            bool success = collectAsKeeper(subId);
+            assertTrue(success, "collection should succeed");
+        }
+
+        assertEq(manager.getPaymentCount(subId), uint256(rounds) + 1);
+        assertEq(manager.merchantEthBalance(merchant), ethAmount * (uint256(rounds) + 1));
+    }
+
+    function testFuzz_Cancel_AtAnyTime(uint256 warpTime) public {
+        warpTime = bound(warpTime, 0, 365 days);
+
+        bytes32 subId = subscribeERC20();
+        vm.warp(block.timestamp + warpTime);
+
+        vm.prank(subscriber);
+        manager.cancelSubscription(subId);
+
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Cancelled));
+    }
+
+    function testFuzz_PauseResume_ClockReset(uint256 pauseDuration) public {
+        pauseDuration = bound(pauseDuration, 1, 365 days);
+
+        bytes32 subId = subscribeERC20();
+
+        vm.prank(subscriber);
+        manager.pauseSubscription(subId);
+
+        vm.warp(block.timestamp + pauseDuration);
+
+        vm.prank(subscriber);
+        manager.resumeSubscription(subId);
+
+        uint256 expectedNext = block.timestamp + INTERVAL;
+        assertEq(manager.nextPaymentDue(subId), expectedNext, "clock resets on resume");
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+
+        // Collection should work after the new interval
+        vm.warp(block.timestamp + INTERVAL + 1);
+        assertTrue(collectAsKeeper(subId));
+    }
+
+    function testFuzz_ClaimMerchantETH_AnyAccumulation(uint8 numPayments) public {
+        numPayments = uint8(bound(numPayments, 1, 10));
+        uint256 ethAmount = 0.5 ether;
+
+        vm.deal(subscriber, ethAmount * (uint256(numPayments) + 1));
+
+        SubscriptionTerms memory terms = makeEthTerms(ethAmount, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: ethAmount}(merchant, terms);
+
+        // Pre-fund and collect
+        vm.prank(subscriber);
+        manager.depositETH{value: ethAmount * uint256(numPayments)}();
+
+        for (uint256 i = 0; i < numPayments; i++) {
+            vm.warp(block.timestamp + INTERVAL + 1);
+            collectAsKeeper(subId);
+        }
+
+        uint256 expectedBalance = ethAmount * (uint256(numPayments) + 1);
+        assertEq(manager.merchantEthBalance(merchant), expectedBalance);
+
+        uint256 merchantBalBefore = merchant.balance;
+
+        vm.prank(merchant);
+        manager.claimMerchantETH();
+
+        assertEq(manager.merchantEthBalance(merchant), 0);
+        assertEq(merchant.balance, merchantBalBefore + expectedBalance);
+    }
+
+    function testFuzz_GetStatus_DynamicPastDue(uint256 overdueTime) public {
+        overdueTime = bound(overdueTime, 1, 365 days);
+
+        bytes32 subId = subscribeERC20();
+        uint256 nextPay = manager.nextPaymentDue(subId);
+
+        vm.warp(nextPay + overdueTime);
+
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.PastDue));
+    }
+
+    function testFuzz_WithdrawETH_Reverts_ExceedsBalance(uint256 depositAmt, uint256 excess) public {
+        depositAmt = bound(depositAmt, 1, 50 ether);
+        excess = bound(excess, 1, 50 ether);
+        uint256 withdrawAmt = depositAmt + excess;
+
+        vm.deal(subscriber, depositAmt);
+
+        vm.prank(subscriber);
+        manager.depositETH{value: depositAmt}();
+
+        vm.prank(subscriber);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SubscriptionManager.InsufficientBalance.selector, subscriber, withdrawAmt, depositAmt
+            )
+        );
+        manager.withdrawETH(withdrawAmt);
+    }
+
+    function testFuzz_Subscribe_ERC20_AmountAndInterval(uint256 amount, uint48 interval_) public {
+        amount = bound(amount, 1, type(uint128).max);
+        interval_ = uint48(bound(interval_, 1 hours, 365 days));
+        uint256 t0 = block.timestamp;
+
+        SubscriptionTerms memory terms = makeTerms(address(token), amount, interval_);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe(merchant, terms);
+
+        assertEq(manager.getPaymentCount(subId), 1);
+        assertEq(manager.nextPaymentDue(subId), t0 + interval_);
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+    }
+
+    function testFuzz_CollectPayment_SoftFail_RecoverAtAnyTime(uint256 recoveryDelay) public {
+        recoveryDelay = bound(recoveryDelay, 0, 90 days);
+
+        bytes32 subId = subscribeERC20();
+
+        // Revoke allowance to trigger PastDue
+        vm.prank(subscriber);
+        token.approve(address(manager), 0);
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        collectAsKeeper(subId);
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.PastDue));
+
+        // Wait arbitrary time, then re-approve and recover
+        vm.warp(block.timestamp + recoveryDelay);
+
+        vm.prank(subscriber);
+        token.approve(address(manager), type(uint256).max);
+
+        bool success = collectAsKeeper(subId);
+        assertTrue(success, "should recover from PastDue");
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+        assertEq(manager.getPaymentCount(subId), 2);
+    }
 }
