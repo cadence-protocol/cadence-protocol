@@ -857,6 +857,8 @@
   let isOwner = false;
   let contractOwner = null;
   let whitelistedTokens = [];
+  let activeProvider = null;        // the EIP-1193 provider we're using
+  const discoveredProviders = [];   // EIP-6963 announced providers
 
   // ── DOM helpers ─────────────────────────────────────────────────────────────
 
@@ -891,7 +893,9 @@
   // ── RPC helpers ─────────────────────────────────────────────────────────────
 
   async function rpcCall(method, params) {
-    return window.ethereum.request({ method, params });
+    const provider = activeProvider || window.ethereum;
+    if (!provider) throw new Error('No wallet provider available');
+    return provider.request({ method, params });
   }
 
   async function ethCall(to, data) {
@@ -990,30 +994,121 @@
     document.getElementById('tokenInput').focus();
   }
 
-  // ── Wallet connection ───────────────────────────────────────────────────────
+  // ── Wallet connection (EIP-6963 + legacy fallback) ──────────────────────────
 
-  async function connectWallet() {
-    if (!window.ethereum) {
-      showAlert('error', 'No wallet detected. Please install MetaMask or another EVM wallet.');
-      return;
+  // EIP-6963: discover all injected wallets (Rabby, MetaMask, Coinbase, etc.)
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('eip6963:announceProvider', (event) => {
+      const { info, provider } = event.detail;
+      if (!discoveredProviders.some(p => p.info.uuid === info.uuid)) {
+        discoveredProviders.push({ info, provider });
+      }
+    });
+    window.dispatchEvent(new Event('eip6963:requestProvider'));
+  }
+
+  async function connectWithProvider(provider) {
+    activeProvider = provider;
+    const accounts = await rpcCall('eth_requestAccounts', []);
+    account = accounts[0];
+    walletChainId = Number(await rpcCall('eth_chainId', []));
+
+    const btn = document.getElementById('walletBtn');
+    btn.textContent = trunc(account);
+    btn.classList.add('connected');
+    btn.onclick = null;
+
+    closeWalletPicker();
+    updateNetworkBar();
+    await checkOwner();
+    await loadWhitelistedTokens();
+
+    // Listen for account/chain changes on selected provider
+    if (activeProvider.on) {
+      activeProvider.on('accountsChanged', (accts) => {
+        if (accts.length === 0) { location.reload(); return; }
+        account = accts[0];
+        document.getElementById('walletBtn').textContent = trunc(account);
+        checkOwner().then(renderTokens);
+      });
+      activeProvider.on('chainChanged', () => location.reload());
+    }
+  }
+
+  function showWalletPicker() {
+    let existing = document.getElementById('walletPicker');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'walletPicker';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);';
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) closeWalletPicker(); });
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;min-width:320px;max-width:400px;';
+
+    let html = '<h3 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--text);">Select Wallet</h3>';
+
+    if (discoveredProviders.length > 0) {
+      html += discoveredProviders.map((p, i) => {
+        const icon = p.info.icon ? `<img src="${escHtml(p.info.icon)}" style="width:28px;height:28px;border-radius:6px;" />` : '';
+        return `<button onclick="pickWallet(${i})" style="display:flex;align-items:center;gap:12px;width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--border2)';this.style.background='rgba(37,99,235,0.08)'" onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.04)'">${icon}<span>${escHtml(p.info.name)}</span></button>`;
+      }).join('');
     }
 
+    // Always show legacy fallback if window.ethereum exists
+    if (window.ethereum) {
+      const alreadyListed = discoveredProviders.length > 0;
+      html += `<button onclick="pickWallet(-1)" style="display:flex;align-items:center;gap:12px;width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:8px;color:var(--text);font-size:14px;font-weight:500;cursor:pointer;font-family:inherit;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--border2)';this.style.background='rgba(37,99,235,0.08)'" onmouseout="this.style.borderColor='var(--border)';this.style.background='rgba(255,255,255,0.04)'"><span>${alreadyListed ? 'Browser Default (window.ethereum)' : 'Browser Wallet'}</span></button>`;
+    }
+
+    if (discoveredProviders.length === 0 && !window.ethereum) {
+      html += '<p style="color:var(--text3);font-size:13px;text-align:center;padding:16px 0;">No wallets detected. Install Rabby, MetaMask, or another EVM wallet.</p>';
+    }
+
+    html += '<button onclick="closeWalletPicker()" style="width:100%;background:transparent;border:1px solid var(--border);border-radius:8px;padding:8px;color:var(--text3);font-size:12px;cursor:pointer;font-family:inherit;margin-top:4px;">Cancel</button>';
+
+    panel.innerHTML = html;
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+  }
+
+  function closeWalletPicker() {
+    const el = document.getElementById('walletPicker');
+    if (el) el.remove();
+  }
+
+  async function pickWallet(index) {
     try {
-      const accounts = await rpcCall('eth_requestAccounts', []);
-      account = accounts[0];
-      walletChainId = Number(await rpcCall('eth_chainId', []));
-
-      const btn = document.getElementById('walletBtn');
-      btn.textContent = trunc(account);
-      btn.classList.add('connected');
-      btn.onclick = null;
-
-      updateNetworkBar();
-      await checkOwner();
-      await loadWhitelistedTokens();
+      const provider = index >= 0 ? discoveredProviders[index].provider : window.ethereum;
+      await connectWithProvider(provider);
     } catch (err) {
+      closeWalletPicker();
       showAlert('error', 'Wallet connection failed: ' + (err.message || err));
     }
+  }
+
+  function connectWallet() {
+    // If only one provider and no EIP-6963, connect directly
+    if (discoveredProviders.length === 0 && window.ethereum) {
+      connectWithProvider(window.ethereum).catch(err => {
+        showAlert('error', 'Wallet connection failed: ' + (err.message || err));
+      });
+      return;
+    }
+    // If exactly one EIP-6963 provider and no ambiguity, connect directly
+    if (discoveredProviders.length === 1 && !window.ethereum) {
+      connectWithProvider(discoveredProviders[0].provider).catch(err => {
+        showAlert('error', 'Wallet connection failed: ' + (err.message || err));
+      });
+      return;
+    }
+    // Multiple options: show picker
+    if (discoveredProviders.length > 0 || window.ethereum) {
+      showWalletPicker();
+      return;
+    }
+    showAlert('error', 'No wallet detected. Install Rabby, MetaMask, or another EVM wallet.');
   }
 
   function updateNetworkBar() {
@@ -1217,21 +1312,6 @@
   document.getElementById('tokenInput').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') addToken();
   });
-
-  // ── Wallet events ───────────────────────────────────────────────────────────
-
-  if (window.ethereum) {
-    window.ethereum.on('accountsChanged', (accounts) => {
-      if (accounts.length === 0) {
-        location.reload();
-      } else {
-        account = accounts[0];
-        document.getElementById('walletBtn').textContent = trunc(account);
-        checkOwner().then(renderTokens);
-      }
-    });
-    window.ethereum.on('chainChanged', () => location.reload());
-  }
 
   // ── Init ────────────────────────────────────────────────────────────────────
 
