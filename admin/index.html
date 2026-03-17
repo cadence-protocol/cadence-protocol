@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadence Protocol — Token Whitelist Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #080D1A;
+      --bg2:       #0D1526;
+      --bg3:       #111D35;
+      --border:    rgba(255,255,255,0.07);
+      --border2:   rgba(99,179,237,0.2);
+      --navy:      #1B2A4A;
+      --blue:      #2563EB;
+      --blue-l:    #3B82F6;
+      --blue-ll:   #60A5FA;
+      --blue-lll:  #93C5FD;
+      --text:      #F0F4FF;
+      --text2:     #94A3B8;
+      --text3:     #64748B;
+      --glow:      rgba(37,99,235,0.15);
+      --success:   #10B981;
+      --error:     #EF4444;
+      --warn:      #F59E0B;
+      --mono:      'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.4;
+    }
+
+    .orb { position: fixed; border-radius: 50%; filter: blur(120px); pointer-events: none; z-index: 0; }
+    .orb-1 { width: 600px; height: 600px; background: rgba(37,99,235,0.12); top: -200px; right: -100px; }
+    .orb-2 { width: 400px; height: 400px; background: rgba(99,102,241,0.08); bottom: 200px; left: -100px; }
+
+    /* ── NAV ───────────────────────────────────────────── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      padding: 0 24px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(8,13,26,0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    nav .nav-left { display: flex; align-items: center; gap: 16px; }
+    nav .nav-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: 0.02em;
+    }
+    nav .nav-title span { color: var(--blue-ll); }
+    .nav-right-group { display: flex; align-items: center; gap: 12px; }
+
+    .wallet-btn {
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .wallet-btn:hover { background: var(--blue-l); transform: translateY(-1px); }
+    .wallet-btn.connected {
+      background: rgba(16,185,129,0.15);
+      color: var(--success);
+      border: 1px solid rgba(16,185,129,0.3);
+      cursor: default;
+    }
+    .wallet-btn.connected:hover { transform: none; }
+
+    .settings-btn {
+      background: rgba(255,255,255,0.05);
+      color: var(--text2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .settings-btn:hover { border-color: var(--border2); color: var(--text); }
+    .settings-btn svg { width: 16px; height: 16px; }
+
+    /* ── LAYOUT ────────────────────────────────────────── */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 88px 24px 64px;
+      position: relative;
+      z-index: 1;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      color: var(--text2);
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+
+    /* ── ALERTS ────────────────────────────────────────── */
+    .alert {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .alert-error {
+      background: rgba(239,68,68,0.10);
+      border: 1px solid rgba(239,68,68,0.3);
+      color: var(--error);
+    }
+    .alert-success {
+      background: rgba(16,185,129,0.10);
+      border: 1px solid rgba(16,185,129,0.3);
+      color: var(--success);
+    }
+    .alert-warn {
+      background: rgba(245,158,11,0.10);
+      border: 1px solid rgba(245,158,11,0.3);
+      color: var(--warn);
+    }
+
+    /* ── CARD ──────────────────────────────────────────── */
+    .card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+    .card h2 {
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text2);
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .card h2 .count {
+      font-size: 11px;
+      background: rgba(37,99,235,0.15);
+      color: var(--blue-ll);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* ── SETTINGS PANEL ───────────────────────────────── */
+    .settings-panel {
+      display: none;
+      margin-bottom: 28px;
+    }
+    .settings-panel.open { display: block; }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .settings-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .settings-field.full-width {
+      grid-column: 1 / -1;
+    }
+    .settings-field label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text3);
+    }
+    .settings-field input, .settings-field select {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      font-family: var(--mono);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .settings-field select {
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .settings-field select option {
+      background: var(--bg2);
+      color: var(--text);
+    }
+    .settings-field input:focus, .settings-field select:focus { border-color: var(--blue); }
+    .settings-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .btn-save {
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s;
+    }
+    .btn-save:hover { background: var(--blue-l); }
+    .btn-reset {
+      background: transparent;
+      color: var(--text3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 20px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .btn-reset:hover { border-color: var(--border2); color: var(--text2); }
+
+    /* ── FORM ──────────────────────────────────────────── */
+    .form-row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    .form-row input {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      font-size: 14px;
+      font-family: var(--mono);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-row input::placeholder { color: var(--text3); }
+    .form-row input:focus { border-color: var(--blue); }
+    .form-row input.invalid { border-color: var(--error); }
+
+    .btn-add {
+      background: var(--blue);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: background 0.2s, transform 0.1s, opacity 0.2s;
+    }
+    .btn-add:hover { background: var(--blue-l); transform: translateY(-1px); }
+    .btn-add:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── COMMON TOKENS ────────────────────────────────── */
+    .common-tokens {
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+    .common-tokens-label {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text3);
+      margin-bottom: 10px;
+    }
+    .token-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .token-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .token-chip:hover {
+      border-color: var(--border2);
+      color: var(--text);
+      background: rgba(37,99,235,0.08);
+    }
+    .token-chip.already-added {
+      opacity: 0.4;
+      cursor: default;
+      border-color: rgba(16,185,129,0.3);
+    }
+    .token-chip.already-added:hover {
+      background: rgba(255,255,255,0.04);
+      color: var(--text2);
+      border-color: rgba(16,185,129,0.3);
+    }
+    .token-chip .chip-symbol {
+      font-weight: 700;
+      color: var(--blue-ll);
+    }
+    .token-chip .chip-check {
+      color: var(--success);
+      font-size: 11px;
+    }
+
+    /* ── TABLE ─────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      padding: 10px 16px;
+      text-align: left;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text3);
+      background: rgba(0,0,0,0.2);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    tbody td {
+      padding: 14px 16px;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+    .mono { font-family: var(--mono); font-size: 12px; }
+    .token-name { font-weight: 600; }
+    .token-symbol { color: var(--blue-ll); font-weight: 500; }
+    .token-addr a {
+      color: var(--text2);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    .token-addr a:hover { color: var(--blue-ll); text-decoration: underline; }
+
+    .btn-revoke {
+      background: rgba(239,68,68,0.10);
+      color: var(--error);
+      border: 1px solid rgba(239,68,68,0.25);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: background 0.2s, transform 0.1s, opacity 0.2s;
+    }
+    .btn-revoke:hover { background: rgba(239,68,68,0.20); transform: translateY(-1px); }
+    .btn-revoke:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .badge-approved {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+      background: rgba(16,185,129,0.15);
+      color: var(--success);
+      border: 1px solid rgba(16,185,129,0.3);
+    }
+
+    .empty {
+      padding: 36px 16px;
+      text-align: center;
+      color: var(--text3);
+      font-size: 13px;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── NETWORK INFO ──────────────────────────────────── */
+    .network-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+      font-size: 12px;
+      color: var(--text3);
+      flex-wrap: wrap;
+    }
+    .network-bar .chain-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(37,99,235,0.12);
+      border: 1px solid rgba(37,99,235,0.3);
+      border-radius: 100px;
+      padding: 4px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--blue-ll);
+    }
+    .network-bar .chain-badge .dot {
+      width: 6px; height: 6px;
+      background: var(--success);
+      border-radius: 50%;
+    }
+    .network-bar .contract-link a {
+      color: var(--text3);
+      text-decoration: none;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+    .network-bar .contract-link a:hover { color: var(--blue-ll); }
+    .wrong-network {
+      background: rgba(239,68,68,0.10) !important;
+      border: 1px solid rgba(239,68,68,0.3) !important;
+      color: var(--error) !important;
+    }
+    .wrong-network .dot { background: var(--error) !important; }
+
+    .owner-info {
+      font-size: 12px;
+      color: var(--text3);
+    }
+    .owner-info .owner-badge { color: var(--success); font-weight: 600; }
+    .owner-info .not-owner-badge { color: var(--error); font-weight: 600; }
+
+    @media (max-width: 640px) {
+      .form-row { flex-direction: column; }
+      .settings-grid { grid-template-columns: 1fr; }
+      .container { padding-top: 80px; }
+      .table-wrap { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+
+  <nav>
+    <div class="nav-left">
+      <span class="nav-title">Cadence <span>Admin</span> — Token Whitelist</span>
+    </div>
+    <div class="nav-right-group">
+      <button class="settings-btn" id="settingsToggle" onclick="toggleSettings()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+      <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">Connect Wallet</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    <h1>Token Whitelist</h1>
+    <p class="subtitle">Manage ERC-20 tokens approved for use in Cadence subscriptions.</p>
+
+    <!-- Settings Panel -->
+    <div class="card settings-panel" id="settingsPanel">
+      <h2>Contract Settings</h2>
+      <div class="settings-grid">
+        <div class="settings-field">
+          <label>Network</label>
+          <select id="settingsChain">
+            <option value="11155111">Sepolia (11155111)</option>
+            <option value="1">Ethereum Mainnet (1)</option>
+            <option value="8453">Base (8453)</option>
+            <option value="42161">Arbitrum One (42161)</option>
+            <option value="10">Optimism (10)</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label>Deploy Block (for event scanning)</label>
+          <input type="number" id="settingsBlock" placeholder="0" />
+        </div>
+        <div class="settings-field full-width">
+          <label>SubscriptionManager Address</label>
+          <input type="text" id="settingsContract" placeholder="0x… contract address" spellcheck="false" autocomplete="off" />
+        </div>
+      </div>
+      <div class="settings-actions">
+        <button class="btn-save" onclick="saveSettings()">Save &amp; Reload</button>
+        <button class="btn-reset" onclick="resetSettings()">Reset to Defaults</button>
+      </div>
+    </div>
+
+    <div class="network-bar" id="networkBar" style="display:none;">
+      <span class="chain-badge" id="chainBadge"><span class="dot"></span> Sepolia</span>
+      <span class="contract-link">Contract: <a id="contractLink" href="#" target="_blank"></a></span>
+      <span class="owner-info" id="ownerInfo"></span>
+    </div>
+
+    <div class="alert alert-error" id="alertError"></div>
+    <div class="alert alert-success" id="alertSuccess"></div>
+    <div class="alert alert-warn" id="alertWarn"></div>
+
+    <!-- Add Token -->
+    <div class="card">
+      <h2>Add Token</h2>
+      <div class="form-row">
+        <input type="text" id="tokenInput" placeholder="0x… ERC-20 token address" spellcheck="false" autocomplete="off" />
+        <button class="btn-add" id="addBtn" onclick="addToken()" disabled>Whitelist Token</button>
+      </div>
+      <div class="common-tokens">
+        <div class="common-tokens-label">Common tokens</div>
+        <div class="token-chips" id="tokenChips"></div>
+      </div>
+    </div>
+
+    <!-- Whitelisted Tokens -->
+    <div class="card">
+      <h2>Whitelisted Tokens <span class="count" id="tokenCount">0</span></h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Token</th>
+              <th>Symbol</th>
+              <th>Address</th>
+              <th>Decimals</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tokenBody">
+            <tr><td colspan="6" class="empty">Connect wallet to load tokens</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ── Chain configuration ─────────────────────────────────────────────────────
+
+  const CHAINS = {
+    11155111: { name: 'Sepolia',        explorer: 'https://sepolia.etherscan.io',      currency: 'ETH' },
+    1:        { name: 'Ethereum',       explorer: 'https://etherscan.io',              currency: 'ETH' },
+    8453:     { name: 'Base',           explorer: 'https://basescan.org',              currency: 'ETH' },
+    42161:    { name: 'Arbitrum One',   explorer: 'https://arbiscan.io',               currency: 'ETH' },
+    10:       { name: 'Optimism',       explorer: 'https://optimistic.etherscan.io',   currency: 'ETH' },
+  };
+
+  // Common ERC-20 tokens per chain (address lists for quick-add)
+  const COMMON_TOKENS = {
+    11155111: [
+      { symbol: 'USDC',  name: 'USD Coin',         address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238' },
+      { symbol: 'USDT',  name: 'Tether USD',       address: '0x7169D38820dfd117C3FA1f22a697dBA58d90BA06' },
+      { symbol: 'DAI',   name: 'Dai Stablecoin',   address: '0x68194a729C2450ad26072b3D33ADaCbcef39D574' },
+      { symbol: 'WETH',  name: 'Wrapped Ether',    address: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14' },
+      { symbol: 'LINK',  name: 'Chainlink',        address: '0x779877A7B0D9E8603169DdbD7836e478b4624789' },
+      { symbol: 'cUSD',  name: 'CadenceUSD',       address: '0xd3D94A29521c5b7358D4EF9e4B87b24A90abeCB4' },
+    ],
+    1: [
+      { symbol: 'USDC',  name: 'USD Coin',         address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' },
+      { symbol: 'USDT',  name: 'Tether USD',       address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' },
+      { symbol: 'DAI',   name: 'Dai Stablecoin',   address: '0x6B175474E89094C44Da98b954EedeAC495271d0F' },
+      { symbol: 'WETH',  name: 'Wrapped Ether',    address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' },
+      { symbol: 'LINK',  name: 'Chainlink',        address: '0x514910771AF9Ca656af840dff83E8264EcF986CA' },
+      { symbol: 'WBTC',  name: 'Wrapped Bitcoin',  address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' },
+    ],
+    8453: [
+      { symbol: 'USDC',  name: 'USD Coin',         address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' },
+      { symbol: 'DAI',   name: 'Dai Stablecoin',   address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb' },
+      { symbol: 'WETH',  name: 'Wrapped Ether',    address: '0x4200000000000000000000000000000000000006' },
+      { symbol: 'cbETH', name: 'Coinbase Eth',     address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22' },
+    ],
+    42161: [
+      { symbol: 'USDC',  name: 'USD Coin',         address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831' },
+      { symbol: 'USDT',  name: 'Tether USD',       address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9' },
+      { symbol: 'DAI',   name: 'Dai Stablecoin',   address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1' },
+      { symbol: 'WETH',  name: 'Wrapped Ether',    address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1' },
+      { symbol: 'ARB',   name: 'Arbitrum',         address: '0x912CE59144191C1204E64559FE8253a0e49E6548' },
+    ],
+    10: [
+      { symbol: 'USDC',  name: 'USD Coin',         address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85' },
+      { symbol: 'USDT',  name: 'Tether USD',       address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58' },
+      { symbol: 'DAI',   name: 'Dai Stablecoin',   address: '0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1' },
+      { symbol: 'WETH',  name: 'Wrapped Ether',    address: '0x4200000000000000000000000000000000000006' },
+      { symbol: 'OP',    name: 'Optimism',         address: '0x4200000000000000000000000000000000000042' },
+    ],
+  };
+
+  // ── Default config ──────────────────────────────────────────────────────────
+
+  const DEFAULTS = {
+    chainId: 11155111,
+    contractAddress: '0xe828dE73B289be1FaE1f54Dd64Faeb24C04F4b33',
+    deployBlock: 10429800,
+  };
+
+  // ── Settings persistence (localStorage) ─────────────────────────────────────
+
+  const STORAGE_KEY = 'cadence_admin_settings';
+
+  function loadSettings() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { ...DEFAULTS };
+  }
+
+  function persistSettings(s) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+  }
+
+  let settings = loadSettings();
+
+  function getExplorer() {
+    return (CHAINS[settings.chainId] || {}).explorer || 'https://etherscan.io';
+  }
+
+  function getChainName() {
+    return (CHAINS[settings.chainId] || {}).name || `Chain ${settings.chainId}`;
+  }
+
+  // ── Minimal ABI fragments ──────────────────────────────────────────────────
+
+  const SM_ABI = {
+    setTokenApproved: {
+      name: 'setTokenApproved',
+      type: 'function',
+      inputs: [{ name: 'token', type: 'address' }, { name: 'approved', type: 'bool' }],
+    },
+    isTokenApproved: {
+      name: 'isTokenApproved',
+      type: 'function',
+      inputs: [{ name: 'token', type: 'address' }],
+      outputs: [{ name: '', type: 'bool' }],
+    },
+    owner: {
+      name: 'owner',
+      type: 'function',
+      inputs: [],
+      outputs: [{ name: '', type: 'address' }],
+    },
+    TokenApprovalSet: {
+      name: 'TokenApprovalSet',
+      type: 'event',
+      inputs: [
+        { name: 'token', type: 'address', indexed: true },
+        { name: 'approved', type: 'bool', indexed: false },
+      ],
+    },
+  };
+
+  const ERC20_ABI = {
+    name:     { name: 'name',     type: 'function', inputs: [], outputs: [{ name: '', type: 'string' }] },
+    symbol:   { name: 'symbol',   type: 'function', inputs: [], outputs: [{ name: '', type: 'string' }] },
+    decimals: { name: 'decimals', type: 'function', inputs: [], outputs: [{ name: '', type: 'uint8' }] },
+  };
+
+  // ── ABI encoding helpers (zero dependencies) ───────────────────────────────
+
+  function encodeFunctionCall(abi, args) {
+    const sig = `${abi.name}(${abi.inputs.map(i => i.type).join(',')})`;
+    const hash = keccak256(new TextEncoder().encode(sig));
+    const selector = hash.slice(0, 10);
+    let data = selector;
+    for (let i = 0; i < abi.inputs.length; i++) {
+      const { type } = abi.inputs[i];
+      const val = args[i];
+      if (type === 'address') {
+        data += val.slice(2).toLowerCase().padStart(64, '0');
+      } else if (type === 'bool') {
+        data += (val ? '1' : '0').padStart(64, '0');
+      } else if (type === 'uint256' || type === 'uint8') {
+        data += BigInt(val).toString(16).padStart(64, '0');
+      }
+    }
+    return data;
+  }
+
+  function decodeFunctionResult(abi, hex) {
+    const data = hex.startsWith('0x') ? hex.slice(2) : hex;
+    const results = [];
+    let offset = 0;
+    for (const out of abi.outputs) {
+      const chunk = data.slice(offset, offset + 64);
+      if (out.type === 'bool') {
+        results.push(BigInt('0x' + chunk) !== 0n);
+      } else if (out.type === 'address') {
+        results.push('0x' + chunk.slice(24));
+      } else if (out.type === 'uint8' || out.type === 'uint256') {
+        results.push(Number(BigInt('0x' + chunk)));
+      } else if (out.type === 'string') {
+        const strOffset = Number(BigInt('0x' + chunk)) * 2;
+        const strLen = Number(BigInt('0x' + data.slice(strOffset, strOffset + 64)));
+        const strHex = data.slice(strOffset + 64, strOffset + 64 + strLen * 2);
+        let str = '';
+        for (let i = 0; i < strHex.length; i += 2) {
+          str += String.fromCharCode(parseInt(strHex.slice(i, i + 2), 16));
+        }
+        results.push(str);
+      }
+      offset += 64;
+    }
+    return results.length === 1 ? results[0] : results;
+  }
+
+  // Keccak-256 (pure JS)
+  const keccak256 = (() => {
+    const RC = [
+      0x0000000000000001n, 0x0000000000008082n, 0x800000000000808An,
+      0x8000000080008000n, 0x000000000000808Bn, 0x0000000080000001n,
+      0x8000000080008081n, 0x8000000000008009n, 0x000000000000008An,
+      0x0000000000000088n, 0x0000000080008009n, 0x000000008000000An,
+      0x000000008000808Bn, 0x800000000000008Bn, 0x8000000000008089n,
+      0x8000000000008003n, 0x8000000000008002n, 0x8000000000000080n,
+      0x000000000000800An, 0x800000008000000An, 0x8000000080008081n,
+      0x8000000000008080n, 0x0000000080000001n, 0x8000000080008008n,
+    ];
+    const ROTC = [1,3,6,10,15,21,28,36,45,55,2,14,27,41,56,8,25,43,62,18,39,61,20,44];
+    const PI = [10,7,11,17,18,3,5,16,8,21,24,4,15,23,19,13,12,2,20,14,22,9,6,1];
+    const mask64 = (1n << 64n) - 1n;
+
+    function rot64(x, n) {
+      return ((x << BigInt(n)) | (x >> BigInt(64 - n))) & mask64;
+    }
+
+    function keccakF(state) {
+      for (let round = 0; round < 24; round++) {
+        const C = new Array(5);
+        for (let x = 0; x < 5; x++) C[x] = state[x] ^ state[x+5] ^ state[x+10] ^ state[x+15] ^ state[x+20];
+        const D = new Array(5);
+        for (let x = 0; x < 5; x++) D[x] = C[(x+4)%5] ^ rot64(C[(x+1)%5], 1);
+        for (let x = 0; x < 5; x++) for (let y = 0; y < 25; y += 5) state[x+y] ^= D[x];
+        let cur = state[1];
+        for (let i = 0; i < 24; i++) {
+          const j = PI[i];
+          const tmp = state[j];
+          state[j] = rot64(cur, ROTC[i]);
+          cur = tmp;
+        }
+        for (let y = 0; y < 25; y += 5) {
+          const t = [state[y], state[y+1], state[y+2], state[y+3], state[y+4]];
+          for (let x = 0; x < 5; x++) state[y+x] = t[x] ^ ((~t[(x+1)%5] & mask64) & t[(x+2)%5]);
+        }
+        state[0] ^= RC[round];
+      }
+    }
+
+    return function keccak256(input) {
+      const rate = 136;
+      let msg;
+      if (input instanceof Uint8Array) {
+        msg = input;
+      } else if (typeof input === 'string') {
+        msg = new TextEncoder().encode(input);
+      } else {
+        msg = new Uint8Array(input);
+      }
+      const padLen = rate - (msg.length % rate);
+      const padded = new Uint8Array(msg.length + padLen);
+      padded.set(msg);
+      padded[msg.length] = 0x01;
+      padded[padded.length - 1] |= 0x80;
+      const state = new Array(25).fill(0n);
+      for (let i = 0; i < padded.length; i += rate) {
+        for (let j = 0; j < rate; j += 8) {
+          const idx = (j / 8) | 0;
+          let val = 0n;
+          for (let k = 0; k < 8; k++) val |= BigInt(padded[i + j + k]) << BigInt(k * 8);
+          state[idx] ^= val;
+        }
+        keccakF(state);
+      }
+      let hex = '0x';
+      for (let i = 0; i < 4; i++) {
+        for (let k = 0; k < 8; k++) {
+          hex += ((state[i] >> BigInt(k * 8)) & 0xFFn).toString(16).padStart(2, '0');
+        }
+      }
+      return hex;
+    };
+  })();
+
+  function getEventTopic(eventAbi) {
+    const sig = `${eventAbi.name}(${eventAbi.inputs.map(i => i.type).join(',')})`;
+    return keccak256(new TextEncoder().encode(sig));
+  }
+
+  // ── State ───────────────────────────────────────────────────────────────────
+
+  let account = null;
+  let walletChainId = null;
+  let isOwner = false;
+  let contractOwner = null;
+  let whitelistedTokens = [];
+
+  // ── DOM helpers ─────────────────────────────────────────────────────────────
+
+  function showAlert(type, msg, duration) {
+    const el = document.getElementById('alert' + type.charAt(0).toUpperCase() + type.slice(1));
+    el.textContent = msg;
+    el.style.display = 'block';
+    if (duration) setTimeout(() => { el.style.display = 'none'; }, duration);
+  }
+
+  function hideAlerts() {
+    ['alertError', 'alertSuccess', 'alertWarn'].forEach(id => {
+      document.getElementById(id).style.display = 'none';
+    });
+  }
+
+  function trunc(addr) {
+    if (!addr) return '--';
+    return addr.slice(0, 6) + '...' + addr.slice(-4);
+  }
+
+  function escHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function isAddress(val) {
+    return /^0x[0-9a-fA-F]{40}$/.test(val);
+  }
+
+  // ── RPC helpers ─────────────────────────────────────────────────────────────
+
+  async function rpcCall(method, params) {
+    return window.ethereum.request({ method, params });
+  }
+
+  async function ethCall(to, data) {
+    return rpcCall('eth_call', [{ to, data }, 'latest']);
+  }
+
+  async function getTokenInfo(tokenAddr) {
+    try {
+      const [nameHex, symbolHex, decimalsHex] = await Promise.all([
+        ethCall(tokenAddr, encodeFunctionCall(ERC20_ABI.name, [])),
+        ethCall(tokenAddr, encodeFunctionCall(ERC20_ABI.symbol, [])),
+        ethCall(tokenAddr, encodeFunctionCall(ERC20_ABI.decimals, [])),
+      ]);
+      return {
+        address: tokenAddr,
+        name: decodeFunctionResult(ERC20_ABI.name, nameHex),
+        symbol: decodeFunctionResult(ERC20_ABI.symbol, symbolHex),
+        decimals: decodeFunctionResult(ERC20_ABI.decimals, decimalsHex),
+      };
+    } catch {
+      return { address: tokenAddr, name: 'Unknown', symbol: '???', decimals: '?' };
+    }
+  }
+
+  // ── Settings panel ──────────────────────────────────────────────────────────
+
+  function toggleSettings() {
+    const panel = document.getElementById('settingsPanel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      document.getElementById('settingsChain').value = settings.chainId;
+      document.getElementById('settingsContract').value = settings.contractAddress;
+      document.getElementById('settingsBlock').value = settings.deployBlock;
+    }
+  }
+
+  function saveSettings() {
+    const chainId = Number(document.getElementById('settingsChain').value);
+    const contractAddress = document.getElementById('settingsContract').value.trim();
+    const deployBlock = Number(document.getElementById('settingsBlock').value) || 0;
+
+    if (!isAddress(contractAddress)) {
+      showAlert('error', 'Invalid contract address.');
+      return;
+    }
+
+    settings = { chainId, contractAddress, deployBlock };
+    persistSettings(settings);
+    hideAlerts();
+    showAlert('success', 'Settings saved. Reloading data...', 3000);
+
+    document.getElementById('settingsPanel').classList.remove('open');
+    renderCommonTokens();
+    if (account) {
+      updateNetworkBar();
+      checkOwner().then(() => loadWhitelistedTokens());
+    }
+  }
+
+  function resetSettings() {
+    settings = { ...DEFAULTS };
+    persistSettings(settings);
+    document.getElementById('settingsChain').value = settings.chainId;
+    document.getElementById('settingsContract').value = settings.contractAddress;
+    document.getElementById('settingsBlock').value = settings.deployBlock;
+    showAlert('success', 'Settings reset to defaults.', 3000);
+    renderCommonTokens();
+    if (account) {
+      updateNetworkBar();
+      checkOwner().then(() => loadWhitelistedTokens());
+    }
+  }
+
+  // ── Common tokens ───────────────────────────────────────────────────────────
+
+  function renderCommonTokens() {
+    const chips = document.getElementById('tokenChips');
+    const tokens = COMMON_TOKENS[settings.chainId] || [];
+
+    if (tokens.length === 0) {
+      chips.innerHTML = '<span style="color:var(--text3);font-size:12px;">No preloaded tokens for this network.</span>';
+      return;
+    }
+
+    chips.innerHTML = tokens.map(t => {
+      const isAdded = whitelistedTokens.some(w => w.address.toLowerCase() === t.address.toLowerCase());
+      if (isAdded) {
+        return `<span class="token-chip already-added" title="${t.address}"><span class="chip-symbol">${escHtml(t.symbol)}</span> ${escHtml(t.name)} <span class="chip-check">&#10003;</span></span>`;
+      }
+      return `<span class="token-chip" title="${t.address}" onclick="fillToken('${t.address}')"><span class="chip-symbol">${escHtml(t.symbol)}</span> ${escHtml(t.name)}</span>`;
+    }).join('');
+  }
+
+  function fillToken(addr) {
+    document.getElementById('tokenInput').value = addr;
+    document.getElementById('tokenInput').focus();
+  }
+
+  // ── Wallet connection ───────────────────────────────────────────────────────
+
+  async function connectWallet() {
+    if (!window.ethereum) {
+      showAlert('error', 'No wallet detected. Please install MetaMask or another EVM wallet.');
+      return;
+    }
+
+    try {
+      const accounts = await rpcCall('eth_requestAccounts', []);
+      account = accounts[0];
+      walletChainId = Number(await rpcCall('eth_chainId', []));
+
+      const btn = document.getElementById('walletBtn');
+      btn.textContent = trunc(account);
+      btn.classList.add('connected');
+      btn.onclick = null;
+
+      updateNetworkBar();
+      await checkOwner();
+      await loadWhitelistedTokens();
+    } catch (err) {
+      showAlert('error', 'Wallet connection failed: ' + (err.message || err));
+    }
+  }
+
+  function updateNetworkBar() {
+    const bar = document.getElementById('networkBar');
+    bar.style.display = 'flex';
+
+    const badge = document.getElementById('chainBadge');
+    if (walletChainId === settings.chainId) {
+      badge.className = 'chain-badge';
+      badge.innerHTML = `<span class="dot"></span> ${getChainName()}`;
+    } else {
+      badge.className = 'chain-badge wrong-network';
+      badge.innerHTML = `<span class="dot"></span> Wrong network (expected ${getChainName()})`;
+      showAlert('warn', `Please switch your wallet to ${getChainName()} (chain ID ${settings.chainId}).`);
+    }
+
+    const link = document.getElementById('contractLink');
+    link.href = `${getExplorer()}/address/${settings.contractAddress}`;
+    link.textContent = trunc(settings.contractAddress);
+  }
+
+  async function checkOwner() {
+    try {
+      const ownerHex = await ethCall(settings.contractAddress, encodeFunctionCall(SM_ABI.owner, []));
+      contractOwner = decodeFunctionResult(SM_ABI.owner, ownerHex).toLowerCase();
+      isOwner = account.toLowerCase() === contractOwner;
+
+      const info = document.getElementById('ownerInfo');
+      if (isOwner) {
+        info.innerHTML = '<span class="owner-badge">Owner</span>';
+        document.getElementById('addBtn').disabled = false;
+      } else {
+        info.innerHTML = `<span class="not-owner-badge">Read-only</span> -- Owner: <a href="${getExplorer()}/address/${contractOwner}" target="_blank" style="color:var(--text3);font-family:var(--mono);font-size:11px;">${trunc(contractOwner)}</a>`;
+        document.getElementById('addBtn').disabled = true;
+      }
+    } catch (err) {
+      showAlert('error', 'Could not read contract owner. Is the contract address correct?');
+      document.getElementById('addBtn').disabled = true;
+    }
+  }
+
+  // ── Load whitelisted tokens ─────────────────────────────────────────────────
+
+  async function loadWhitelistedTokens() {
+    const tbody = document.getElementById('tokenBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="empty"><span class="spinner"></span>Loading tokens...</td></tr>';
+
+    try {
+      const topic = getEventTopic(SM_ABI.TokenApprovalSet);
+      const logs = await rpcCall('eth_getLogs', [{
+        address: settings.contractAddress,
+        topics: [topic],
+        fromBlock: '0x' + settings.deployBlock.toString(16),
+        toBlock: 'latest',
+      }]);
+
+      const tokenState = new Map();
+      for (const log of logs) {
+        const tokenAddr = '0x' + log.topics[1].slice(26).toLowerCase();
+        const approved = BigInt(log.data) !== 0n;
+        tokenState.set(tokenAddr, approved);
+      }
+
+      const approvedAddrs = [];
+      for (const [addr, approved] of tokenState) {
+        if (approved) approvedAddrs.push(addr);
+      }
+
+      whitelistedTokens = await Promise.all(approvedAddrs.map(getTokenInfo));
+      renderTokens();
+      renderCommonTokens();
+    } catch (err) {
+      showAlert('error', 'Failed to load tokens: ' + (err.message || err));
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">Error loading tokens</td></tr>';
+    }
+  }
+
+  function renderTokens() {
+    const tbody = document.getElementById('tokenBody');
+    document.getElementById('tokenCount').textContent = whitelistedTokens.length;
+
+    if (whitelistedTokens.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty">No tokens whitelisted yet</td></tr>';
+      return;
+    }
+
+    const explorer = getExplorer();
+    tbody.innerHTML = whitelistedTokens.map(t => `
+      <tr>
+        <td class="token-name">${escHtml(t.name)}</td>
+        <td class="token-symbol">${escHtml(t.symbol)}</td>
+        <td class="token-addr mono"><a href="${explorer}/address/${t.address}" target="_blank" title="${t.address}">${trunc(t.address)}</a></td>
+        <td>${t.decimals}</td>
+        <td><span class="badge-approved">Approved</span></td>
+        <td>${isOwner ? `<button class="btn-revoke" onclick="revokeToken('${t.address}')">Revoke</button>` : ''}</td>
+      </tr>
+    `).join('');
+  }
+
+  // ── Add / Revoke tokens ─────────────────────────────────────────────────────
+
+  async function addToken() {
+    hideAlerts();
+    const input = document.getElementById('tokenInput');
+    const addr = input.value.trim();
+
+    if (!isAddress(addr)) {
+      input.classList.add('invalid');
+      showAlert('error', 'Please enter a valid ERC-20 token address (0x...).');
+      return;
+    }
+    input.classList.remove('invalid');
+
+    if (addr.toLowerCase() === '0x0000000000000000000000000000000000000000') {
+      showAlert('error', 'Native ETH (address(0)) is always accepted and cannot be managed here.');
+      return;
+    }
+
+    const alreadyExists = whitelistedTokens.some(t => t.address.toLowerCase() === addr.toLowerCase());
+    if (alreadyExists) {
+      showAlert('warn', 'This token is already whitelisted.');
+      return;
+    }
+
+    const btn = document.getElementById('addBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Sending tx...';
+
+    try {
+      const data = encodeFunctionCall(SM_ABI.setTokenApproved, [addr, true]);
+      const txHash = await rpcCall('eth_sendTransaction', [{
+        from: account,
+        to: settings.contractAddress,
+        data: data,
+      }]);
+
+      btn.innerHTML = '<span class="spinner"></span>Confirming...';
+      await waitForReceipt(txHash);
+
+      showAlert('success', `Token whitelisted! Tx: ${trunc(txHash)}`, 8000);
+      input.value = '';
+      await loadWhitelistedTokens();
+    } catch (err) {
+      if (err.code === 4001) {
+        showAlert('warn', 'Transaction rejected by user.');
+      } else {
+        showAlert('error', 'Transaction failed: ' + (err.message || err));
+      }
+    } finally {
+      btn.disabled = !isOwner;
+      btn.textContent = 'Whitelist Token';
+    }
+  }
+
+  async function revokeToken(addr) {
+    hideAlerts();
+    const btns = document.querySelectorAll('.btn-revoke');
+    btns.forEach(b => b.disabled = true);
+
+    try {
+      const data = encodeFunctionCall(SM_ABI.setTokenApproved, [addr, false]);
+      const txHash = await rpcCall('eth_sendTransaction', [{
+        from: account,
+        to: settings.contractAddress,
+        data: data,
+      }]);
+
+      showAlert('warn', `Revoking token... Tx: ${trunc(txHash)}`, 0);
+      await waitForReceipt(txHash);
+
+      showAlert('success', `Token revoked! Tx: ${trunc(txHash)}`, 8000);
+      await loadWhitelistedTokens();
+    } catch (err) {
+      if (err.code === 4001) {
+        showAlert('warn', 'Transaction rejected by user.');
+      } else {
+        showAlert('error', 'Revoke failed: ' + (err.message || err));
+      }
+      btns.forEach(b => b.disabled = false);
+    }
+  }
+
+  async function waitForReceipt(txHash, maxAttempts = 60) {
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise(r => setTimeout(r, 2000));
+      const receipt = await rpcCall('eth_getTransactionReceipt', [txHash]);
+      if (receipt) {
+        if (receipt.status === '0x0') throw new Error('Transaction reverted');
+        return receipt;
+      }
+    }
+    throw new Error('Transaction not confirmed after 2 minutes');
+  }
+
+  // ── Input events ────────────────────────────────────────────────────────────
+
+  document.getElementById('tokenInput').addEventListener('input', function() {
+    this.classList.remove('invalid');
+  });
+
+  document.getElementById('tokenInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') addToken();
+  });
+
+  // ── Wallet events ───────────────────────────────────────────────────────────
+
+  if (window.ethereum) {
+    window.ethereum.on('accountsChanged', (accounts) => {
+      if (accounts.length === 0) {
+        location.reload();
+      } else {
+        account = accounts[0];
+        document.getElementById('walletBtn').textContent = trunc(account);
+        checkOwner().then(renderTokens);
+      }
+    });
+    window.ethereum.on('chainChanged', () => location.reload());
+  }
+
+  // ── Init ────────────────────────────────────────────────────────────────────
+
+  renderCommonTokens();
+</script>
+</body>
+</html>
