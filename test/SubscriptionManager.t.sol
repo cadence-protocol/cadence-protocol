@@ -33,12 +33,18 @@ contract SubscriptionManagerTest is Test {
 
     // ─── Setup ────────────────────────────────────────────────────────────────
 
+    address public owner = makeAddr("owner");
+
     function setUp() public {
         token = new MockERC20();
         registry = new MockKeeperRegistry();
-        manager = new SubscriptionManager(address(registry));
+        manager = new SubscriptionManager(address(registry), owner);
 
         registry.setAuthorized(keeper, true);
+
+        // Whitelist the test token
+        vm.prank(owner);
+        manager.setTokenApproved(address(token), true);
 
         token.mint(subscriber, type(uint128).max);
         vm.prank(subscriber);
@@ -798,7 +804,11 @@ contract SubscriptionManagerTest is Test {
 
     function test_NoRegistryMode_AnyoneCanCollect() public {
         // keeperRegistry == address(0) means permissionless collection
-        SubscriptionManager openManager = new SubscriptionManager(address(0));
+        SubscriptionManager openManager = new SubscriptionManager(address(0), owner);
+
+        // Whitelist token on the open manager
+        vm.prank(owner);
+        openManager.setTokenApproved(address(token), true);
 
         token.mint(subscriber, AMOUNT);
         vm.startPrank(subscriber);
@@ -1026,6 +1036,95 @@ contract SubscriptionManagerTest is Test {
         vm.warp(nextPay + overdueTime);
 
         assertEq(uint8(manager.getStatus(subId)), uint8(Status.PastDue));
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Token Whitelist Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    function test_SetTokenApproved_Success() public {
+        MockERC20 newToken = new MockERC20();
+        assertFalse(manager.isTokenApproved(address(newToken)));
+
+        vm.prank(owner);
+        manager.setTokenApproved(address(newToken), true);
+
+        assertTrue(manager.isTokenApproved(address(newToken)));
+    }
+
+    function test_SetTokenApproved_Revoke() public {
+        assertTrue(manager.isTokenApproved(address(token)));
+
+        vm.prank(owner);
+        manager.setTokenApproved(address(token), false);
+
+        assertFalse(manager.isTokenApproved(address(token)));
+    }
+
+    function test_SetTokenApproved_Reverts_NotOwner() public {
+        MockERC20 newToken = new MockERC20();
+        vm.prank(stranger);
+        vm.expectRevert();
+        manager.setTokenApproved(address(newToken), true);
+    }
+
+    function test_SetTokenApproved_Reverts_AddressZero() public {
+        vm.prank(owner);
+        vm.expectRevert("use address(0) for ETH; always accepted");
+        manager.setTokenApproved(address(0), true);
+    }
+
+    function test_Subscribe_Reverts_TokenNotApproved() public {
+        MockERC20 unapproved = new MockERC20();
+        unapproved.mint(subscriber, AMOUNT);
+        vm.prank(subscriber);
+        unapproved.approve(address(manager), type(uint256).max);
+
+        SubscriptionTerms memory terms = makeTerms(address(unapproved), AMOUNT, INTERVAL);
+        vm.prank(subscriber);
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionManager.TokenNotApproved.selector, address(unapproved)));
+        manager.subscribe(merchant, terms);
+    }
+
+    function test_Subscribe_SucceedsAfterTokenApproval() public {
+        MockERC20 newToken = new MockERC20();
+        newToken.mint(subscriber, AMOUNT);
+        vm.prank(subscriber);
+        newToken.approve(address(manager), type(uint256).max);
+
+        // Approve token
+        vm.prank(owner);
+        manager.setTokenApproved(address(newToken), true);
+
+        SubscriptionTerms memory terms = makeTerms(address(newToken), AMOUNT, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe(merchant, terms);
+
+        assertNotEq(subId, bytes32(0));
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+    }
+
+    function test_Subscribe_ETH_DoesNotRequireWhitelist() public {
+        // ETH subscriptions should work without any whitelist entry
+        SubscriptionTerms memory terms = makeEthTerms(1 ether, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: 1 ether}(merchant, terms);
+
+        assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
+    }
+
+    function test_ExistingSubscription_WorksAfterTokenRevoked() public {
+        // Create subscription with approved token
+        bytes32 subId = subscribeERC20();
+
+        // Revoke token approval
+        vm.prank(owner);
+        manager.setTokenApproved(address(token), false);
+
+        // Existing subscription's collectPayment should still work (no re-validation)
+        vm.warp(block.timestamp + INTERVAL + 1);
+        bool success = collectAsKeeper(subId);
+        assertTrue(success, "existing subscription should still collect after token revoked");
     }
 
     function testFuzz_WithdrawETH_Reverts_ExceedsBalance(uint256 depositAmt, uint256 excess) public {

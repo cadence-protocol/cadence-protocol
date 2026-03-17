@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 import "./interfaces/ISubscription.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ERC165} from "@openzeppelin/contracts/utils/introspection/ERC165.sol";
@@ -24,7 +25,7 @@ interface IKeeperRegistry {
 ///      in a claimable balance to avoid re-entrancy risks in collectPayment().
 ///      Payment collection is gated behind a KeeperRegistry to prevent griefing.
 /// @custom:security-contact security@cadenceprotocol.build
-contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
+contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
     // ─────────────────────────────────────────────
@@ -56,6 +57,10 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @param available Amount actually held
     error InsufficientBalance(address account, uint256 required, uint256 available);
 
+    /// @notice Thrown when a subscription uses a token that is not on the approved whitelist
+    /// @param token The unapproved token address
+    error TokenNotApproved(address token);
+
     // ─────────────────────────────────────────────
     // Additional Events
     // ─────────────────────────────────────────────
@@ -69,6 +74,11 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @param recipient Address that received ETH
     /// @param amount    Amount withdrawn in wei
     event ETHWithdrawn(address indexed recipient, uint256 amount);
+
+    /// @notice Emitted when a token's whitelist status is changed by the owner
+    /// @param token    The ERC-20 token address
+    /// @param approved True if approved, false if removed
+    event TokenApprovalSet(address indexed token, bool approved);
 
     // ─────────────────────────────────────────────
     // State
@@ -91,6 +101,10 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     ///      Claimed via claimMerchantETH() — pull model avoids re-entrancy.
     mapping(address => uint256) private _merchantEthBalances;
 
+    /// @dev Whitelisted ERC-20 tokens. Only approved tokens can be used in subscriptions.
+    ///      Native ETH (address(0)) is always accepted and does not need to be whitelisted.
+    mapping(address => bool) private _approvedTokens;
+
     /// @notice Address of the KeeperRegistry contract that authorises payment collectors.
     ///         If address(0), collectPayment is permissionless (test/development only).
     address public keeperRegistry;
@@ -105,7 +119,8 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
     /// @notice Deploy a new SubscriptionManager
     /// @param keeperRegistry_ Address of the KeeperRegistry. Pass address(0) to
     ///                        disable keeper gating (not recommended for production).
-    constructor(address keeperRegistry_) {
+    /// @param owner_           Address that will own this contract and manage the token whitelist.
+    constructor(address keeperRegistry_, address owner_) Ownable(owner_) {
         keeperRegistry = keeperRegistry_;
     }
 
@@ -175,6 +190,29 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
         emit ETHWithdrawn(msg.sender, amount);
         (bool sent,) = msg.sender.call{value: amount}("");
         require(sent, "ETH claim failed");
+    }
+
+    // ─────────────────────────────────────────────
+    // Token Whitelist — Owner Only
+    // ─────────────────────────────────────────────
+
+    /// @notice Approve or revoke an ERC-20 token for use in subscriptions.
+    /// @dev Only callable by the contract owner. Native ETH (address(0)) is always
+    ///      accepted and cannot be managed via this function.
+    ///      Emits {TokenApprovalSet}.
+    /// @param token    The ERC-20 token address to approve or revoke
+    /// @param approved True to approve, false to revoke
+    function setTokenApproved(address token, bool approved) external onlyOwner {
+        require(token != address(0), "use address(0) for ETH; always accepted");
+        _approvedTokens[token] = approved;
+        emit TokenApprovalSet(token, approved);
+    }
+
+    /// @notice Check whether an ERC-20 token is approved for subscriptions.
+    /// @param token The token address to query
+    /// @return      True if the token is on the whitelist
+    function isTokenApproved(address token) external view returns (bool) {
+        return _approvedTokens[token];
     }
 
     // ─────────────────────────────────────────────
@@ -564,8 +602,9 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard {
         if (terms.amount == 0) revert ZeroAmount();
         if (terms.interval == 0) revert ZeroInterval();
         if (merchant == address(0)) revert InvalidTerms("merchant cannot be zero address");
-        if (terms.token != address(0) && terms.token.code.length == 0) {
-            revert InvalidTerms("token must be a contract");
+        if (terms.token != address(0)) {
+            if (terms.token.code.length == 0) revert InvalidTerms("token must be a contract");
+            if (!_approvedTokens[terms.token]) revert TokenNotApproved(terms.token);
         }
     }
 

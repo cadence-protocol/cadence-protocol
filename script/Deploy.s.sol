@@ -24,7 +24,8 @@ contract Deploy is Script {
 
         // 2. Deploy SubscriptionManager
         //    - wired to the KeeperRegistry just deployed
-        SubscriptionManager manager = new SubscriptionManager(address(registry));
+        //    - deployer is owner (manages token whitelist)
+        SubscriptionManager manager = new SubscriptionManager(address(registry), deployer);
         console.log("SubscriptionManager deployed at:", address(manager));
 
         // 3. Deploy CadenceUSD test token

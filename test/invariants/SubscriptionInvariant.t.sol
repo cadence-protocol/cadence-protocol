@@ -207,7 +207,11 @@ contract SubscriptionInvariantTest is Test {
     function setUp() public {
         token = new MockERC20();
         // keeperRegistry == address(0): permissionless collection for invariant testing
-        manager = new SubscriptionManager(address(0));
+        manager = new SubscriptionManager(address(0), address(this));
+
+        // Whitelist the test token
+        manager.setTokenApproved(address(token), true);
+
         handler = new SubscriptionManagerHandler(manager, token);
 
         targetContract(address(handler));

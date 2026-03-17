@@ -15,10 +15,11 @@ import {SubscriptionManager} from "../src/SubscriptionManager.sol";
 contract DeploySubscriptionManager is Script {
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(pk);
         address keeperRegistry = vm.envAddress("KEEPER_REGISTRY");
 
         vm.startBroadcast(pk);
-        SubscriptionManager manager = new SubscriptionManager(keeperRegistry);
+        SubscriptionManager manager = new SubscriptionManager(keeperRegistry, deployer);
         vm.stopBroadcast();
 
         console.log("---");
