@@ -10,9 +10,9 @@
         "etherscan": "https://sepolia.etherscan.io/address/0x9Ff8f7493bE5Afbd7b5Ff7a5DC6df73b33BeC128"
       },
       "SubscriptionManager": {
-        "address": "0xe828dE73B289be1FaE1f54Dd64Faeb24C04F4b33",
-        "block": 10429800,
-        "etherscan": "https://sepolia.etherscan.io/address/0xe828dE73B289be1FaE1f54Dd64Faeb24C04F4b33"
+        "address": "0xE588E45371a363792056e1f2B578370823a10d92",
+        "block": 10468243,
+        "etherscan": "https://sepolia.etherscan.io/address/0xE588E45371a363792056e1f2B578370823a10d92"
       },
       "CadenceUSD": {
         "address": "0xd3D94A29521c5b7358D4EF9e4B87b24A90abeCB4",

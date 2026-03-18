@@ -654,8 +654,8 @@
 
   const DEFAULTS = {
     chainId: 11155111,
-    contractAddress: '0xe828dE73B289be1FaE1f54Dd64Faeb24C04F4b33',
-    deployBlock: 10429800,
+    contractAddress: '0xE588E45371a363792056e1f2B578370823a10d92',
+    deployBlock: 10468243,
   };
 
   // ── Settings persistence (localStorage) ─────────────────────────────────────
@@ -1009,6 +1009,7 @@
 
   async function connectWithProvider(provider) {
     activeProvider = provider;
+    closeWalletPicker(); // close before requesting accounts so Rabby popup is visible
     const accounts = await rpcCall('eth_requestAccounts', []);
     account = accounts[0];
     walletChainId = Number(await rpcCall('eth_chainId', []));
@@ -1017,8 +1018,6 @@
     btn.textContent = trunc(account);
     btn.classList.add('connected');
     btn.onclick = null;
-
-    closeWalletPicker();
     updateNetworkBar();
     await checkOwner();
     await loadWhitelistedTokens();
