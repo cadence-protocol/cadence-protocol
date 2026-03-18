@@ -80,6 +80,18 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
     /// @param approved True if approved, false if removed
     event TokenApprovalSet(address indexed token, bool approved);
 
+    /// @notice Emitted when a keeper fee is deducted during payment collection
+    /// @param subId  The subscription that generated the fee
+    /// @param keeper Address of the keeper that collected the payment
+    /// @param fee    Fee amount deducted (in token units or wei)
+    /// @param token  Token address (address(0) for native ETH)
+    event KeeperFeeCollected(bytes32 indexed subId, address indexed keeper, uint256 fee, address token);
+
+    /// @notice Emitted when the owner changes the keeper fee rate
+    /// @param oldBps Previous fee in basis points
+    /// @param newBps New fee in basis points
+    event KeeperFeeBpsUpdated(uint16 oldBps, uint16 newBps);
+
     // ─────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────
@@ -108,6 +120,17 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
     /// @notice Address of the KeeperRegistry contract that authorises payment collectors.
     ///         If address(0), collectPayment is permissionless (test/development only).
     address public keeperRegistry;
+
+    /// @notice Keeper fee rate in basis points (1 bps = 0.01%). Max 1000 (10%).
+    ///         Fee is deducted from each collectPayment and credited to the calling keeper.
+    uint16 public keeperFeeBps;
+
+    /// @dev Maximum keeper fee: 10% (1000 basis points)
+    uint16 private constant MAX_KEEPER_FEE_BPS = 1000;
+
+    /// @dev Accumulated ETH fee proceeds per keeper address.
+    ///      Claimed via claimKeeperETH() — pull model.
+    mapping(address => uint256) private _keeperEthBalances;
 
     /// @dev Monotonic nonce used in subId derivation to guarantee uniqueness
     uint256 private _nonce;
@@ -213,6 +236,41 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
     /// @return      True if the token is on the whitelist
     function isTokenApproved(address token) external view returns (bool) {
         return _approvedTokens[token];
+    }
+
+    // ─────────────────────────────────────────────
+    // Keeper Fee — Owner Config & Keeper Claims
+    // ─────────────────────────────────────────────
+
+    /// @notice Set the keeper fee rate. Only callable by the contract owner.
+    /// @dev Fee is applied on each collectPayment. Capped at MAX_KEEPER_FEE_BPS (10%).
+    ///      Emits {KeeperFeeBpsUpdated}.
+    /// @param bps New fee in basis points (100 = 1%)
+    function setKeeperFeeBps(uint16 bps) external onlyOwner {
+        require(bps <= MAX_KEEPER_FEE_BPS, "fee exceeds 10%");
+        uint16 old = keeperFeeBps;
+        keeperFeeBps = bps;
+        emit KeeperFeeBpsUpdated(old, bps);
+    }
+
+    /// @notice Claim all accumulated ETH keeper fee proceeds for the caller.
+    /// @dev Pull model identical to claimMerchantETH(). Emits {ETHWithdrawn}.
+    function claimKeeperETH() external nonReentrant {
+        uint256 amount = _keeperEthBalances[msg.sender];
+        if (amount == 0) revert InsufficientBalance(msg.sender, 1, 0);
+
+        _keeperEthBalances[msg.sender] = 0;
+
+        emit ETHWithdrawn(msg.sender, amount);
+        (bool sent,) = msg.sender.call{value: amount}("");
+        require(sent, "ETH claim failed");
+    }
+
+    /// @notice Return the claimable ETH fee balance for a keeper.
+    /// @param keeper Keeper address to query
+    /// @return       ETH balance in wei
+    function keeperEthBalance(address keeper) external view returns (uint256) {
+        return _keeperEthBalances[keeper];
     }
 
     // ─────────────────────────────────────────────
@@ -507,27 +565,39 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
 
     /// @dev Collect a single ETH payment. Soft-fails (PastDue + PaymentFailed event,
     ///      returns false) if the subscriber's deposit balance is insufficient.
+    ///      When keeperFeeBps > 0, the fee is deducted from the payment amount and
+    ///      credited to the calling keeper's balance.
     function _collectETHPayment(bytes32 subId, SubscriptionData storage sub) internal returns (bool) {
+        uint256 amount = sub.terms.amount;
         uint256 available = _ethDeposits[sub.subscriber];
-        if (available < sub.terms.amount) {
+        if (available < amount) {
             sub.status = Status.PastDue;
             emit PaymentFailed(subId, block.timestamp, "insufficient ETH deposit");
             return false;
         }
 
+        // ── Fee calculation ────────────────────────────────────────────────────
+        uint256 fee = (keeperFeeBps > 0) ? (amount * keeperFeeBps) / 10_000 : 0;
+        uint256 merchantAmount = amount - fee;
+
         // ── Effects ────────────────────────────────────────────────────────────
-        _ethDeposits[sub.subscriber] -= sub.terms.amount;
-        _merchantEthBalances[sub.merchant] += sub.terms.amount;
+        _ethDeposits[sub.subscriber] -= amount;
+        _merchantEthBalances[sub.merchant] += merchantAmount;
+        if (fee > 0) {
+            _keeperEthBalances[msg.sender] += fee;
+        }
         sub.paymentCount += 1;
         sub.lastPaymentAt = block.timestamp;
         sub.nextPaymentAt = block.timestamp + sub.terms.interval;
         sub.status = Status.Active;
 
         address merchant = sub.merchant;
-        uint256 amount = sub.terms.amount;
 
         // ── Interactions ───────────────────────────────────────────────────────
         emit PaymentCollected(subId, amount, address(0), block.timestamp);
+        if (fee > 0) {
+            emit KeeperFeeCollected(subId, msg.sender, fee, address(0));
+        }
         _notifyPaymentCollected(merchant, subId, amount, address(0));
 
         return true;
@@ -535,9 +605,11 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
 
     /// @dev Collect a single ERC-20 payment. Soft-fails (PastDue + PaymentFailed event,
     ///      returns false) if the subscriber's allowance is insufficient.
+    ///      When keeperFeeBps > 0, the fee is transferred to the calling keeper.
     function _collectERC20Payment(bytes32 subId, SubscriptionData storage sub) internal returns (bool) {
+        uint256 amount = sub.terms.amount;
         uint256 allowance = IERC20(sub.terms.token).allowance(sub.subscriber, address(this));
-        if (allowance < sub.terms.amount) {
+        if (allowance < amount) {
             sub.status = Status.PastDue;
             emit PaymentFailed(subId, block.timestamp, "insufficient allowance");
             return false;
@@ -547,7 +619,10 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
         address subscriber = sub.subscriber;
         address merchant = sub.merchant;
         address token = sub.terms.token;
-        uint256 amount = sub.terms.amount;
+
+        // ── Fee calculation ────────────────────────────────────────────────────
+        uint256 fee = (keeperFeeBps > 0) ? (amount * keeperFeeBps) / 10_000 : 0;
+        uint256 merchantAmount = amount - fee;
 
         // ── Effects ────────────────────────────────────────────────────────────
         sub.paymentCount += 1;
@@ -556,7 +631,11 @@ contract SubscriptionManager is ISubscription, ERC165, ReentrancyGuard, Ownable 
         sub.status = Status.Active;
 
         // ── Interactions ───────────────────────────────────────────────────────
-        IERC20(token).safeTransferFrom(subscriber, merchant, amount);
+        IERC20(token).safeTransferFrom(subscriber, merchant, merchantAmount);
+        if (fee > 0) {
+            IERC20(token).safeTransferFrom(subscriber, msg.sender, fee);
+            emit KeeperFeeCollected(subId, msg.sender, fee, token);
+        }
         emit PaymentCollected(subId, amount, token, block.timestamp);
         _notifyPaymentCollected(merchant, subId, amount, token);
 

@@ -1184,4 +1184,213 @@ contract SubscriptionManagerTest is Test {
         assertEq(uint8(manager.getStatus(subId)), uint8(Status.Active));
         assertEq(manager.getPaymentCount(subId), 2);
     }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Keeper Fee Tests
+    // ─────────────────────────────────────────────────────────────────────────
+
+    event KeeperFeeCollected(bytes32 indexed subId, address indexed keeper, uint256 fee, address token);
+    event KeeperFeeBpsUpdated(uint16 oldBps, uint16 newBps);
+
+    function test_SetKeeperFeeBps_Success() public {
+        vm.prank(owner);
+        manager.setKeeperFeeBps(250); // 2.5%
+        assertEq(manager.keeperFeeBps(), 250);
+    }
+
+    function test_SetKeeperFeeBps_EmitsEvent() public {
+        vm.prank(owner);
+        vm.expectEmit(false, false, false, true);
+        emit KeeperFeeBpsUpdated(0, 500);
+        manager.setKeeperFeeBps(500);
+    }
+
+    function test_SetKeeperFeeBps_Reverts_ExceedsMax() public {
+        vm.prank(owner);
+        vm.expectRevert("fee exceeds 10%");
+        manager.setKeeperFeeBps(1001);
+    }
+
+    function test_SetKeeperFeeBps_Reverts_NotOwner() public {
+        vm.prank(stranger);
+        vm.expectRevert();
+        manager.setKeeperFeeBps(100);
+    }
+
+    function test_KeeperFee_ETH_DeductsFromMerchant() public {
+        uint256 ethAmount = 1 ether;
+        vm.deal(subscriber, ethAmount * 2);
+
+        // Set 5% fee
+        vm.prank(owner);
+        manager.setKeeperFeeBps(500);
+
+        SubscriptionTerms memory terms = makeEthTerms(ethAmount, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: ethAmount}(merchant, terms);
+
+        // First payment in subscribe() has no fee (no keeper)
+        assertEq(manager.merchantEthBalance(merchant), ethAmount);
+
+        // Pre-fund and collect via keeper
+        vm.prank(subscriber);
+        manager.depositETH{value: ethAmount}();
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        vm.prank(keeper);
+        bool success = manager.collectPayment(subId);
+        assertTrue(success);
+
+        uint256 expectedFee = (ethAmount * 500) / 10_000; // 5% = 0.05 ETH
+        uint256 expectedMerchant = ethAmount - expectedFee;
+
+        // Merchant gets first payment (full) + second (minus fee)
+        assertEq(manager.merchantEthBalance(merchant), ethAmount + expectedMerchant);
+        assertEq(manager.keeperEthBalance(keeper), expectedFee);
+    }
+
+    function test_KeeperFee_ETH_EmitsEvent() public {
+        uint256 ethAmount = 1 ether;
+        vm.deal(subscriber, ethAmount * 2);
+
+        vm.prank(owner);
+        manager.setKeeperFeeBps(500);
+
+        SubscriptionTerms memory terms = makeEthTerms(ethAmount, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: ethAmount}(merchant, terms);
+
+        vm.prank(subscriber);
+        manager.depositETH{value: ethAmount}();
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+
+        uint256 expectedFee = (ethAmount * 500) / 10_000;
+
+        vm.prank(keeper);
+        vm.expectEmit(true, true, false, true);
+        emit KeeperFeeCollected(subId, keeper, expectedFee, address(0));
+        manager.collectPayment(subId);
+    }
+
+    function test_KeeperFee_ERC20_SplitsTransfer() public {
+        vm.prank(owner);
+        manager.setKeeperFeeBps(300); // 3%
+
+        bytes32 subId = subscribeERC20();
+
+        uint256 merchantBefore = token.balanceOf(merchant);
+        uint256 keeperBefore = token.balanceOf(keeper);
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        vm.prank(keeper);
+        bool success = manager.collectPayment(subId);
+        assertTrue(success);
+
+        uint256 expectedFee = (AMOUNT * 300) / 10_000;
+        uint256 expectedMerchant = AMOUNT - expectedFee;
+
+        assertEq(token.balanceOf(merchant), merchantBefore + expectedMerchant);
+        assertEq(token.balanceOf(keeper), keeperBefore + expectedFee);
+    }
+
+    function test_KeeperFee_ClaimKeeperETH() public {
+        uint256 ethAmount = 1 ether;
+        vm.deal(subscriber, ethAmount * 2);
+        vm.deal(keeper, 0); // reset keeper balance
+
+        vm.prank(owner);
+        manager.setKeeperFeeBps(500);
+
+        SubscriptionTerms memory terms = makeEthTerms(ethAmount, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: ethAmount}(merchant, terms);
+
+        vm.prank(subscriber);
+        manager.depositETH{value: ethAmount}();
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        vm.prank(keeper);
+        manager.collectPayment(subId);
+
+        uint256 expectedFee = (ethAmount * 500) / 10_000;
+        assertEq(manager.keeperEthBalance(keeper), expectedFee);
+
+        vm.prank(keeper);
+        manager.claimKeeperETH();
+
+        assertEq(manager.keeperEthBalance(keeper), 0);
+        assertEq(keeper.balance, expectedFee);
+    }
+
+    function test_ClaimKeeperETH_Reverts_ZeroBalance() public {
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(SubscriptionManager.InsufficientBalance.selector, keeper, 1, 0));
+        manager.claimKeeperETH();
+    }
+
+    function test_KeeperFee_ZeroBps_NoFee() public {
+        // Default is 0 bps — no fee deducted
+        assertEq(manager.keeperFeeBps(), 0);
+
+        bytes32 subId = subscribeERC20();
+        uint256 merchantBefore = token.balanceOf(merchant);
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        vm.prank(keeper);
+        manager.collectPayment(subId);
+
+        // Full amount goes to merchant
+        assertEq(token.balanceOf(merchant), merchantBefore + AMOUNT);
+        assertEq(token.balanceOf(keeper), 0);
+    }
+
+    function testFuzz_KeeperFee_ETH_AnyValidBps(uint16 bps) public {
+        bps = uint16(bound(bps, 1, 1000));
+
+        uint256 ethAmount = 10 ether;
+        vm.deal(subscriber, ethAmount * 2);
+
+        vm.prank(owner);
+        manager.setKeeperFeeBps(bps);
+
+        SubscriptionTerms memory terms = makeEthTerms(ethAmount, INTERVAL);
+        vm.prank(subscriber);
+        bytes32 subId = manager.subscribe{value: ethAmount}(merchant, terms);
+
+        vm.prank(subscriber);
+        manager.depositETH{value: ethAmount}();
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        vm.prank(keeper);
+        manager.collectPayment(subId);
+
+        uint256 expectedFee = (ethAmount * bps) / 10_000;
+        uint256 expectedMerchant = ethAmount - expectedFee;
+
+        // First payment (full, no keeper) + second (with fee)
+        assertEq(manager.merchantEthBalance(merchant), ethAmount + expectedMerchant);
+        assertEq(manager.keeperEthBalance(keeper), expectedFee);
+    }
+
+    function testFuzz_KeeperFee_ERC20_AnyValidBps(uint16 bps) public {
+        bps = uint16(bound(bps, 1, 1000));
+
+        vm.prank(owner);
+        manager.setKeeperFeeBps(bps);
+
+        bytes32 subId = subscribeERC20();
+
+        uint256 merchantBefore = token.balanceOf(merchant);
+
+        vm.warp(block.timestamp + INTERVAL + 1);
+        vm.prank(keeper);
+        manager.collectPayment(subId);
+
+        uint256 expectedFee = (AMOUNT * bps) / 10_000;
+        uint256 expectedMerchant = AMOUNT - expectedFee;
+
+        assertEq(token.balanceOf(merchant), merchantBefore + expectedMerchant);
+        assertEq(token.balanceOf(keeper), expectedFee);
+    }
 }
