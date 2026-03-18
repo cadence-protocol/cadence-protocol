@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cadence Protocol — Token Whitelist Admin</title>
+  <title>Cadence Protocol — Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -563,6 +563,29 @@
     <div class="alert alert-success" id="alertSuccess"></div>
     <div class="alert alert-warn" id="alertWarn"></div>
 
+    <!-- Keeper Fee -->
+    <div class="card" id="keeperFeeCard" style="display:none;">
+      <h2>Keeper Fee</h2>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">Fee deducted from each payment collection and credited to the executing keeper. Max 10% (1000 bps).</p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        <span style="font-size:13px;color:var(--text3);">Current fee:</span>
+        <span id="currentFeeBps" style="font-family:var(--mono);font-size:14px;font-weight:600;color:var(--blue-ll);">--</span>
+        <span id="currentFeePercent" style="font-size:12px;color:var(--text3);">--</span>
+      </div>
+      <div class="form-row">
+        <input type="number" id="feeInput" placeholder="Fee in basis points (0–1000)" min="0" max="1000" step="1" />
+        <button class="btn-add" id="setFeeBtn" onclick="setKeeperFee()" disabled>Set Fee</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <button class="token-chip" onclick="document.getElementById('feeInput').value=0">0 bps (0%)</button>
+        <button class="token-chip" onclick="document.getElementById('feeInput').value=50">50 bps (0.5%)</button>
+        <button class="token-chip" onclick="document.getElementById('feeInput').value=100">100 bps (1%)</button>
+        <button class="token-chip" onclick="document.getElementById('feeInput').value=250">250 bps (2.5%)</button>
+        <button class="token-chip" onclick="document.getElementById('feeInput').value=500">500 bps (5%)</button>
+        <button class="token-chip" onclick="document.getElementById('feeInput').value=1000">1000 bps (10%)</button>
+      </div>
+    </div>
+
     <!-- Add Token -->
     <div class="card">
       <h2>Add Token</h2>
@@ -712,6 +735,17 @@
         { name: 'approved', type: 'bool', indexed: false },
       ],
     },
+    keeperFeeBps: {
+      name: 'keeperFeeBps',
+      type: 'function',
+      inputs: [],
+      outputs: [{ name: '', type: 'uint16' }],
+    },
+    setKeeperFeeBps: {
+      name: 'setKeeperFeeBps',
+      type: 'function',
+      inputs: [{ name: 'bps', type: 'uint16' }],
+    },
   };
 
   const ERC20_ABI = {
@@ -734,7 +768,7 @@
         data += val.slice(2).toLowerCase().padStart(64, '0');
       } else if (type === 'bool') {
         data += (val ? '1' : '0').padStart(64, '0');
-      } else if (type === 'uint256' || type === 'uint8') {
+      } else if (type === 'uint256' || type === 'uint16' || type === 'uint8') {
         data += BigInt(val).toString(16).padStart(64, '0');
       }
     }
@@ -751,7 +785,7 @@
         results.push(BigInt('0x' + chunk) !== 0n);
       } else if (out.type === 'address') {
         results.push('0x' + chunk.slice(24));
-      } else if (out.type === 'uint8' || out.type === 'uint256') {
+      } else if (out.type === 'uint8' || out.type === 'uint16' || out.type === 'uint256') {
         results.push(Number(BigInt('0x' + chunk)));
       } else if (out.type === 'string') {
         const strOffset = Number(BigInt('0x' + chunk)) * 2;
@@ -951,7 +985,7 @@
     renderCommonTokens();
     if (account) {
       updateNetworkBar();
-      checkOwner().then(() => loadWhitelistedTokens());
+      checkOwner().then(() => { loadWhitelistedTokens(); loadKeeperFee(); });
     }
   }
 
@@ -965,7 +999,7 @@
     renderCommonTokens();
     if (account) {
       updateNetworkBar();
-      checkOwner().then(() => loadWhitelistedTokens());
+      checkOwner().then(() => { loadWhitelistedTokens(); loadKeeperFee(); });
     }
   }
 
@@ -1020,7 +1054,7 @@
     btn.onclick = null;
     updateNetworkBar();
     await checkOwner();
-    await loadWhitelistedTokens();
+    await Promise.all([loadWhitelistedTokens(), loadKeeperFee()]);
 
     // Listen for account/chain changes on selected provider
     if (activeProvider.on) {
@@ -1028,7 +1062,7 @@
         if (accts.length === 0) { location.reload(); return; }
         account = accts[0];
         document.getElementById('walletBtn').textContent = trunc(account);
-        checkOwner().then(renderTokens);
+        checkOwner().then(() => { renderTokens(); loadKeeperFee(); });
       });
       activeProvider.on('chainChanged', () => location.reload());
     }
@@ -1300,6 +1334,63 @@
       }
     }
     throw new Error('Transaction not confirmed after 2 minutes');
+  }
+
+  // ── Keeper Fee ─────────────────────────────────────────────────────────────
+
+  async function loadKeeperFee() {
+    try {
+      const hex = await ethCall(settings.contractAddress, encodeFunctionCall(SM_ABI.keeperFeeBps, []));
+      const bps = decodeFunctionResult(SM_ABI.keeperFeeBps, hex);
+      document.getElementById('currentFeeBps').textContent = bps + ' bps';
+      document.getElementById('currentFeePercent').textContent = '(' + (bps / 100).toFixed(2) + '%)';
+      document.getElementById('keeperFeeCard').style.display = '';
+      document.getElementById('setFeeBtn').disabled = !isOwner;
+    } catch (err) {
+      document.getElementById('keeperFeeCard').style.display = '';
+      document.getElementById('currentFeeBps').textContent = 'Error';
+      document.getElementById('currentFeePercent').textContent = '';
+    }
+  }
+
+  async function setKeeperFee() {
+    hideAlerts();
+    const input = document.getElementById('feeInput');
+    const bps = Number(input.value);
+
+    if (isNaN(bps) || bps < 0 || bps > 1000 || !Number.isInteger(bps)) {
+      showAlert('error', 'Fee must be an integer between 0 and 1000 bps.');
+      return;
+    }
+
+    const btn = document.getElementById('setFeeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Sending tx...';
+
+    try {
+      const data = encodeFunctionCall(SM_ABI.setKeeperFeeBps, [bps]);
+      const txHash = await rpcCall('eth_sendTransaction', [{
+        from: account,
+        to: settings.contractAddress,
+        data: data,
+      }]);
+
+      btn.innerHTML = '<span class="spinner"></span>Confirming...';
+      await waitForReceipt(txHash);
+
+      showAlert('success', `Keeper fee updated to ${bps} bps (${(bps / 100).toFixed(2)}%). Tx: ${trunc(txHash)}`, 8000);
+      input.value = '';
+      await loadKeeperFee();
+    } catch (err) {
+      if (err.code === 4001) {
+        showAlert('warn', 'Transaction rejected by user.');
+      } else {
+        showAlert('error', 'Transaction failed: ' + (err.message || err));
+      }
+    } finally {
+      btn.disabled = !isOwner;
+      btn.textContent = 'Set Fee';
+    }
   }
 
   // ── Input events ────────────────────────────────────────────────────────────
