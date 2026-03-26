@@ -20,7 +20,7 @@ ERC-8191 defines a KeeperRegistry that executes recurring pull payments on behal
 
 Currently, `collectPayment()` executes unconditionally — if the subscription is active, funds are available, and the interval has elapsed, payment proceeds. ERC-8191 defines `ISubscriptionHook` for **post-failure** dunning (onPaymentFailed, onDunningCancelled), but there is no hook point for external logic to run **before** each collection.
 
-This companion spec defines **ICollectionGate** — an optional interface that runs before `collectPayment()` executes. Unlike `ISubscriptionHook` (which handles failure aftermath), ICollectionGate handles **pre-payment verification**:
+This companion spec defines **IKeeperHook** — an optional interface that runs before and after `collectPayment()` executes. Unlike `ISubscriptionHook` (which handles failure aftermath), IKeeperHook handles **pre-payment verification**:
 
 - **Verification:** Is this renewal still justified? (ThoughtProof)
 - **Trust gating:** Is the service provider still trusted? (Maiat, RNWY)
@@ -47,13 +47,13 @@ interface IKeeperHook {
     /**
      * @notice Called before a keeper executes a collection cycle.
      * @dev Revert to block the collection. Return silently to allow.
-     * @param subscriptionId The subscription being collected
+     * @param subId The subscription being collected (bytes32 per ERC-8191)
      * @param cycle The current cycle number (0-indexed)
      * @param amount The amount to be collected this cycle
      * @param provider The service provider receiving payment
      * @param data Optional hook-specific data
      */
-    function beforeCollect(
+    function beforeKeep(
         bytes32 subId,
         uint256 cycle,
         uint256 amount,
@@ -65,14 +65,14 @@ interface IKeeperHook {
      * @notice Called after a successful collection.
      * @dev Cannot revert to undo the collection. For bookkeeping only.
      *      Note: ERC-8191's ISubscriptionHook handles post-FAILURE hooks (dunning).
-     *      This afterCollect handles post-SUCCESS bookkeeping (reputation, logging).
+     *      This afterKeep handles post-SUCCESS bookkeeping (reputation, logging).
      * @param subId The subscription collected (bytes32 per ERC-8191)
      * @param cycle The cycle that was collected
      * @param amount The amount that was collected
      * @param merchant The merchant that received payment
      * @param data Optional hook-specific data
      */
-    function afterCollect(
+    function afterKeep(
         bytes32 subId,
         uint256 cycle,
         uint256 amount,
@@ -224,11 +224,11 @@ Same pattern, different trigger points. Composable across standards.
 
 ## 6. Open Questions
 
-1. **Should hooks be per-subscription or global?** Per-subscription gives fine-grained control. Global is simpler for keepers.
+1. ~~**Should hooks be per-subscription or global?**~~ **RESOLVED: Per-subscription.** Different subscriptions may require different verification conditions. The subscriber's funds are at risk — they need per-subscription control. (Consensus: ThoughtProof, InsumerAPI, Cadence)
 
 2. **Gas limits for beforeKeep?** Hooks that call external oracles may use significant gas. Should there be a gas cap?
 
-3. **Hook registration:** Who sets the hook — subscriber, provider, or keeper? **Recommendation: the subscriber sets the hook**, analogous to ERC-8183 where the job creator sets the hook. This prevents a provider from registering a hook that always approves their own payments. The subscriber is the party whose funds are at risk — they should control the gate.
+3. ~~**Hook registration:** Who sets the hook?~~ **RESOLVED: The subscriber sets the hook.** Analogous to ERC-8183 where the job creator sets the hook. Prevents a provider from registering a hook that always approves their own payments. The subscriber is the party whose funds are at risk — they control the gate. (Consensus: ThoughtProof, InsumerAPI, Cadence)
 
 4. **Multiple hooks per subscription?** ERC-8183 supports one hook per job. Should ERC-8191 support chaining?
 
