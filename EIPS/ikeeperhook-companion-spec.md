@@ -16,7 +16,7 @@
 
 ## 1. Motivation
 
-ERC-8191 defines a KeeperRegistry that executes recurring pull payments on behalf of subscribers. Each payment cycle, a keeper calls `collect()` to transfer funds from subscriber to service provider.
+ERC-8191 defines a KeeperRegistry that executes recurring pull payments on behalf of subscribers. Each payment cycle, a keeper calls `collectPayment()` to transfer funds from subscriber to service provider.
 
 Currently, `collectPayment()` executes unconditionally — if the subscription is active, funds are available, and the interval has elapsed, payment proceeds. ERC-8191 defines `ISubscriptionHook` for **post-failure** dunning (onPaymentFailed, onDunningCancelled), but there is no hook point for external logic to run **before** each collection.
 
@@ -50,7 +50,7 @@ interface IKeeperHook {
      * @param subId The subscription being collected (bytes32 per ERC-8191)
      * @param cycle The current cycle number (0-indexed)
      * @param amount The amount to be collected this cycle
-     * @param provider The service provider receiving payment
+     * @param merchant The service provider receiving payment
      * @param data Optional hook-specific data
      */
     function beforeKeep(
